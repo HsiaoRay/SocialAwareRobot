@@ -1,0 +1,21 @@
+# editors
+.idea/
+.vscode/
+
+# Python
+*.egg-info/
+.pytest_cache/
+__pycache__
+.cache/
+venv*/
+
+# data
+data/
+*.mp4
+videos/
+
+# mac
+.DS_Store
+
+# tensorboard
+crowd_nav/runs
