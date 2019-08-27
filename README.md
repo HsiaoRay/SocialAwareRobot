@@ -8,6 +8,8 @@ Robot moving among humans and obstacles driven by empowerment to make it social 
 - Don't push humans
 - Reach goal in a realistic time!
 
+# How do you achieve this?
+
 # Result
 
 ![](tmp.gif)
