@@ -10,11 +10,11 @@ Robot moving among humans and obstacles driven by empowerment to make it social 
 
 # Result
 
-![](videos/tmp.gif)
+![](tmp.gif)
 
 # Architecture and implementation details
 
-![](images/architecture)
+![](architecture.png)
 
 
 
