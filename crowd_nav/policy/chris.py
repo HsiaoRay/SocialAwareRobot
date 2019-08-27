@@ -200,7 +200,7 @@ class Chris(MultiHumanRL):
             max_action_id = None
             for action_id, action in enumerate(self.action_space):
                 action = ActionXY(action[0], action[1])
-                next_self_state = self.propagate_by_force(state.self_state, action)
+                next_self_state = self.propagate(state.self_state, action)
                 if self.query_env:
                     next_human_states, reward, done, info = self.env.onestep_lookahead(action)
                 else:

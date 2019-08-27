@@ -131,62 +131,6 @@ class CADRL(Policy):
 
         return next_state
 
-    def propagate_by_force(self, state, action):
-        next_px = state.px + (self.time_step * action.vx * 0.5 + state.vx) * self.time_step
-        next_py = state.py + (self.time_step * action.vy * 0.5 + state.vy) * self.time_step
-        next_vx = (self.time_step * action.vx * 0.5 + state.vx) * self.time_step
-        next_vy = (self.time_step * action.vy * 0.5 + state.vy) * self.time_step
-        if isinstance(state, ObservableState):
-            next_state = ObservableState(next_px, next_py, next_vx, next_vy, state.radius)
-        elif isinstance(state, FullState):
-            next_state = FullState(next_px, next_py, action.vx, action.vy, state.radius,
-                                       state.gx, state.gy, state.v_pref, state.theta)
-        return next_state
-
-    def predict(self, state):
-        """
-        Input state is the joint state of robot concatenated by the observable state of other agents
-
-        To predict the best action, agent samples actions and propagates one step to see how good the next state is
-        thus the reward function is needed
-
-        """
-        if self.phase is None or self.device is None:
-            raise AttributeError('Phase, device attributes have to be set!')
-        if self.phase == 'train' and self.epsilon is None:
-            raise AttributeError('Epsilon attribute has to be set in training phase')
-
-        if self.reach_destination(state):
-            return ActionXY(0, 0) if self.kinematics == 'holonomic' else ActionRot(0, 0)
-        if self.action_space is None:
-            self.build_action_space(state.self_state.v_pref)
-
-        probability = np.random.random()
-        if self.phase == 'train' and probability < self.epsilon:
-            max_action = self.action_space[np.random.choice(len(self.action_space))]
-        else:
-            self.action_values = list()
-            max_min_value = float('-inf')
-            max_action = None
-            for action in self.action_space:
-                next_self_state = self.propagate(state.self_state, action)
-                ob, reward, done, info = self.env.onestep_lookahead(action)
-                batch_next_states = torch.cat([torch.Tensor([next_self_state + next_human_state]).to(self.device)
-                                              for next_human_state in ob if isinstance(next_human_state, ObservableState)], dim=0)
-                # VALUE UPDATE
-                outputs = self.model(self.rotate(batch_next_states))
-                min_output, min_index = torch.min(outputs, 0)
-                min_value = reward + pow(self.gamma, self.time_step * state.self_state.v_pref) * min_output.data.item()
-                self.action_values.append(min_value)
-                if min_value > max_min_value:
-                    max_min_value = min_value
-                    max_action = action
-
-        if self.phase == 'train':
-            self.last_state = self.transform(state)
-
-        return max_action
-
     def transform(self, state):
         """
         Take the state passed from agent and transform it to tensor for batch training
