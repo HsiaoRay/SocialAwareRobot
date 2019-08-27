@@ -1,10 +1,8 @@
 import torch
 import torch.nn as nn
 import numpy as np
-import itertools
 import logging
 from crowd_sim.envs.policy.policy import Policy
-from crowd_sim.envs.utils.action import ActionRot, ActionXY
 from crowd_sim.envs.utils.state import ObservableState, FullState
 
 
@@ -77,29 +75,6 @@ class CADRL(Policy):
 
     def set_epsilon(self, epsilon):
         self.epsilon = epsilon
-
-    def build_action_space(self, v_pref):
-        """
-        Action space consists of 25 uniformly sampled actions in permitted range and 25 randomly sampled actions.
-        """
-        holonomic = True if self.kinematics == 'holonomic' else False
-        speeds = [(np.exp((i + 1) / self.speed_samples) - 1) / (np.e - 1) * v_pref for i in
-                  range(self.speed_samples)]
-        if holonomic:
-            rotations = np.linspace(0, 2 * np.pi, self.rotation_samples, endpoint=False)
-        else:
-            rotations = np.linspace(-np.pi / 4, np.pi / 4, self.rotation_samples)
-
-        action_space = [ActionXY(0, 0) if holonomic else ActionRot(0, 0)]
-        for rotation, speed in itertools.product(rotations, speeds):
-            if holonomic:
-                action_space.append(ActionXY(speed * np.cos(rotation), speed * np.sin(rotation)))
-            else:
-                action_space.append(ActionRot(speed, rotation))
-
-        self.speeds = speeds
-        self.rotations = rotations
-        self.action_space = action_space
 
     def get_action_space(self):
         return self.action_space
