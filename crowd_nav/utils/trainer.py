@@ -18,8 +18,8 @@ class EmpowermentTrainer(object):
                  device,
                  batch_size,
                  il_learning_rate_q=0.01,
-                 il_learning_rate_s=0.01,
-                 il_learning_rate_fwd=0.01,
+                 il_learning_rate_s=0.001,
+                 il_learning_rate_fwd=0.001,
                  rl_learning_rate_q=0.0001,
                  rl_learning_rate_s=0.0001,
                  rl_learning_rate_fwd=0.001,
@@ -63,7 +63,7 @@ class EmpowermentTrainer(object):
         logging.info('Current learning rate policy model: %f', learning_rate_q)
         logging.info('Current learning rate statistics model: %f', learning_rate_s)
         logging.info('Current learning rate forward dynamics model: %f', learning_rate_fwd)
-        self.optimizer_policy_model = optim.Adam(self.policy_model.parameters(), lr=learning_rate_q)
+        self.optimizer_policy_model = optim.SGD(self.policy_model.parameters(), lr=learning_rate_q, momentum=0.9)
         self.optimizer_statistics_model = optim.Adam(self.statistics_model.parameters(), lr=learning_rate_s)
         self.optimizer_forward_dynamics_model = optim.Adam(self.forward_dynamics_model.parameters(), lr=learning_rate_fwd)
 
@@ -123,8 +123,8 @@ class EmpowermentTrainer(object):
 
     def optimize_forward(self, states, action_ids, new_states, losses):
         self.forward_dynamics_model.zero_grad()
-        outputs = self.forward_dynamics_model(states, self.encode_actions(action_ids, self.forward_dynamics_model.action_size).to(self.device))
-        loss = self.criterion_fwd(outputs, new_states.squeeze(dim=1))
+        outputs = self.forward_dynamics_model(states, self.encode_actions(action_ids, self.forward_dynamics_model.action_dim).to(self.device))
+        loss = self.criterion_fwd(outputs, new_states)
         loss.backward()
         self.optimizer_forward_dynamics_model.step()
         losses += loss.data.item()
@@ -134,7 +134,7 @@ class EmpowermentTrainer(object):
         new_state_marginals = []
         for state in states:
             with torch.no_grad():
-                action_dim = self.forward_dynamics_model.action_space.shape[0]
+                action_dim = self.forward_dynamics_model.action_dim
                 hot_tensor = self.build_eye(action_dim)
                 hot_tensor = hot_tensor.type(torch.float32).to(self.device)
                 state = state.unsqueeze(dim=0)
@@ -174,11 +174,11 @@ class EmpowermentTrainer(object):
 
     def encode_actions(self, ids, action_dim):
         batch_size = ids.shape[0]
-        hot_tensor = torch.zeros(batch_size, action_dim)
+        hot_tensor = torch.zeros(batch_size, action_dim+1)
         for i, id in enumerate(ids):
             hot_tensor[i][id] = 1
         return hot_tensor[:, 1:]
 
     def build_eye(self, action_dim):
-        eye = torch.eye(action_dim)
+        eye = torch.eye(action_dim+1)
         return eye[:, 1:]
