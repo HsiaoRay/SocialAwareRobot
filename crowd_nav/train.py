@@ -183,7 +183,7 @@ def main():
     # fill the memory pool with some RL experience
     if args.resume:
         robot.policy.set_epsilon(epsilon_end)
-        explorer.run_k_episodes(100, 'train', update_memory=True, episode=0)
+        explorer.run_k_episodes(1, 'train', update_memory=True, episode=0)
         logging.info('Experience set size: %d/%d', len(memory), memory.capacity)
     episode = 0
     while episode < train_episodes:
@@ -202,7 +202,7 @@ def main():
 
         # sample k episodes into memory and optimize over the generated memory
         explorer.run_k_episodes(sample_episodes, 'train', update_memory=True, episode=episode)
-        trainer.optimize_batch(train_batches)
+        trainer.optimize_batch(train_batches, augment_rewards=True)
         episode += 1
 
         if episode % target_update_interval == 0:

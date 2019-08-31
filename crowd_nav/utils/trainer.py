@@ -20,8 +20,8 @@ class EmpowermentTrainer(object):
                  il_learning_rate_q=0.01,
                  il_learning_rate_s=0.001,
                  il_learning_rate_fwd=0.001,
-                 rl_learning_rate_q=0.0001,
-                 rl_learning_rate_s=0.0001,
+                 rl_learning_rate_q=0.001,
+                 rl_learning_rate_s=0.001,
                  rl_learning_rate_fwd=0.001,
                  intrinsic_param = 0.0025,
                  n_epochs=50):
@@ -39,7 +39,7 @@ class EmpowermentTrainer(object):
         self.rl_learning_rate_fwd = rl_learning_rate_fwd
         self.criterion_q = nn.MSELoss().to(device)
         self.criterion_fwd = nn.MSELoss().to(device)
-        self.criterion_statistics = nn.KLDivLoss().to(device)
+        self.criterion_statistics = nn.MSELoss().to(device)
         self.n_epochs = n_epochs
         self.policy_model = policy_model.to(self.device)
         self.statistics_model = statistics_model.to(self.device)
@@ -64,7 +64,7 @@ class EmpowermentTrainer(object):
         logging.info('Current learning rate statistics model: %f', learning_rate_s)
         logging.info('Current learning rate forward dynamics model: %f', learning_rate_fwd)
         self.optimizer_policy_model = optim.SGD(self.policy_model.parameters(), lr=learning_rate_q, momentum=0.9)
-        self.optimizer_statistics_model = optim.Adam(self.statistics_model.parameters(), lr=learning_rate_s)
+        self.optimizer_statistics_model = optim.SGD(self.statistics_model.parameters(), lr=learning_rate_s, momentum=0.9)
         self.optimizer_forward_dynamics_model = optim.Adam(self.forward_dynamics_model.parameters(), lr=learning_rate_fwd)
 
     def optimize_epoch(self, n_epochs):
@@ -74,15 +74,31 @@ class EmpowermentTrainer(object):
         for epoch in range(n_epochs):
             start_time = time.time()
             losses_policy = 0
+            losses_statistics = 0
+            losses_forward = 0
 
             for data in self.data_loader:
                 states, new_states, actions, action_ids, rewards = data
                 states = Variable(states).to(self.device)
                 rewards = Variable(rewards).to(self.device)
 
+                losses_forward = self.optimize_forward(states=states, action_ids=action_ids, new_states=new_states,
+                                                       losses=losses_forward)
+                losses_statistics, augmented_rewards = self.optimize_statistics(states=states, new_states=new_states,
+                                                                                actions=actions, action_ids=action_ids,
+                                                                                losses=losses_statistics)
+
                 losses_policy = self.optimize_policy(states=states, rewards=rewards, losses=losses_policy)
 
-            logging.info('Epoch: %f took %f seconds', epoch, time.time() - start_time)
+            logging.info('Epoch: {:.2f}, '
+                         'Time: {:.2f}, '
+                         'Rewards: {:.2f}, '
+                         'Augmented rewards: {:.2f}, '
+                         'loss statistics: {:.4f}, '
+                         'loss forward: {:.4f}, '
+                         'loss policy: {:.4f},'.
+                         format(epoch, time.time() - start_time, torch.mean(rewards), torch.mean(augmented_rewards),
+                                losses_statistics, losses_forward, losses_policy))
 
     def optimize_batch(self, num_batches, augment_rewards=True):
         if self.data_loader is None:
@@ -103,9 +119,11 @@ class EmpowermentTrainer(object):
             losses_statistics, augmented_rewards = self.optimize_statistics(states=states, new_states=new_states,
                                                                             actions=actions, action_ids=action_ids, losses=losses_statistics)
             if augment_rewards:
-                for i in range(len(rewards)):
-                    rewards[i] += augmented_rewards[i]
-
+                for i in range(0, len(rewards)):
+                    if rewards[i] >= 0.5:
+                        rewards[i] += augmented_rewards[i]
+                    elif rewards[i] <= 0.3:
+                        rewards[i] -= augmented_rewards[i]
             losses_policy = self.optimize_policy(states=states, rewards=rewards, losses=losses_policy)
         average_loss = losses_policy / num_batches
         logging.debug('Average loss : %.2E', average_loss)
@@ -154,8 +172,8 @@ class EmpowermentTrainer(object):
         p_sa = self.statistics_model(new_states, action_ids)
         p_s_a = self.statistics_model(new_state_marginals, action_ids)
 
-        lower_bound = - torch.mean(-p_s_a) - torch.log(torch.mean(torch.exp(p_s_a)))
-        mutual_information = - p_sa - torch.log(torch.exp(p_s_a))
+        lower_bound = self.criterion_statistics(-p_sa, p_s_a)
+        mutual_information = F.softplus(p_sa) - F.softplus(p_s_a)
 
         # Maximize the mutual information
         loss = -lower_bound
@@ -164,7 +182,7 @@ class EmpowermentTrainer(object):
         self.optimizer_statistics_model.step()
 
         mutual_information = mutual_information.detach()
-        mutual_information = torch.clamp(input=mutual_information, min=-1., max=1.)
+        #mutual_information = torch.clamp(input=mutual_information, min=-1., max=1.)
 
         augmented_rewards = self.intrinsic_param * mutual_information
         # augmented_rewards = mutual_information

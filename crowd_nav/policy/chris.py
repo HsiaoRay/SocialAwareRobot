@@ -8,7 +8,7 @@ import itertools
 
 from crowd_nav.policy.multi_human_rl import MultiHumanRL
 from crowd_sim.envs.utils.state import ObservableState
-from crowd_sim.envs.utils.action import ActionRot, ActionXY
+from crowd_sim.envs.utils.action import ActionXY
 from crowd_nav.policy.cadrl import mlp
 
 class ValueNetwork(nn.Module):
@@ -71,47 +71,86 @@ class ValueNetwork(nn.Module):
 
 
 class ForwardDynamicsNetwork(nn.Module):
-    def __init__(self, input_dim, action_dim, mlp1_dims, mlp2_dims, mlp3_dims):
+    def __init__(self, input_dim, action_dim):
         super().__init__()
-        self.global_state_dim = mlp1_dims[-1]
-        self.action_space = build_action_space()
-        self.action_size = len(self.action_space)
         self.action_dim = action_dim
-        self.mlp1 = mlp(input_dim, mlp1_dims, last_relu=True)
-        self.mlp2 = mlp(self.action_size-1, mlp2_dims, last_relu=True)
-        self.mlp3 = mlp(mlp1_dims[-1] + mlp2_dims[-1], mlp3_dims)
+        self.input_dim = input_dim * 5
+        self.state_layer1 = nn.Linear(in_features=self.input_dim, out_features=150)
+        self.state_layer2 = nn.Linear(in_features=150, out_features=250)
+        self.state_layer3 = nn.Linear(in_features=250, out_features=150)
+        self.action_layer1 = nn.Linear(in_features=self.action_dim, out_features=150)
+        self.action_layer2 = nn.Linear(in_features=150, out_features=250)
+        self.action_layer3 = nn.Linear(in_features=250, out_features=150)
+        self.concated_layer = nn.Linear(in_features=300, out_features=512)
+        self.fc1 = nn.Linear(in_features=512, out_features=256)
+        self.fc2 = nn.Linear(in_features=256, out_features=128)
+        self.fc3 = nn.Linear(in_features=128, out_features=self.input_dim)
+        self.elu = F.elu
 
-    def forward(self, current_state, actions):
-        (batch_size, humans, state_dim) = current_state.shape
-        mlp1_output = self.mlp1(current_state.view(batch_size * humans, -1))
-        mlp2_output = self.mlp2(actions)
-        concated = torch.cat([mlp1_output, mlp2_output.repeat(5, 1)], dim=-1)
-        mlp3_output = self.mlp3(concated)
-        return mlp3_output.view(batch_size, humans, state_dim)
+    def forward(self, current_states, actions):
+        (batch_size, humans, state_dim) = current_states.shape
+        current_states = current_states.view(batch_size, -1)
+        current_states = self.state_layer1(current_states)
+        current_states = self.elu(current_states)
+        current_states = self.state_layer2(current_states)
+        current_states = self.elu(current_states)
+        current_states = self.state_layer3(current_states)
+        current_states = self.elu(current_states)
+        actions = actions.view(batch_size, -1)
+        actions = self.action_layer1(actions)
+        actions = self.elu(actions)
+        actions = self.action_layer2(actions)
+        actions = self.elu(actions)
+        actions = self.action_layer3(actions)
+        actions = self.elu(actions)
+        concated = torch.cat((current_states, actions), dim=1)
+        x = self.concated_layer(concated)
+        x = self.fc1(x)
+        x = self.fc2(x)
+        x = self.fc3(x)
+        return x.view(batch_size, humans, -1)
 
 
 class StatisticsNetwork(nn.Module):
-    def __init__(self, input_dim, self_state_dim, mlp1_dims, mlp2_dims, mlp3_dims):
+    def __init__(self, input_dim, action_dim):
         super().__init__()
-        self.self_state_dim = self_state_dim
-        self.global_state_dim = mlp1_dims[-1]
-        self.mlp1 = mlp(input_dim, mlp1_dims)
-        self.mlp2 = mlp(80, mlp2_dims)
-        self.mlp3 = mlp(mlp1_dims[-1] + mlp2_dims[-1], mlp3_dims)
-        self.fc = nn.Linear(in_features=5120, out_features=1)
+        self.action_dim = action_dim
+        self.input_dim = input_dim * 5
+        self.state_layer1 = nn.Linear(in_features=self.input_dim, out_features=150)
+        self.state_layer2 = nn.Linear(in_features=150, out_features=250)
+        self.state_layer3 = nn.Linear(in_features=250, out_features=150)
+        self.action_layer1 = nn.Linear(in_features=action_dim, out_features=150)
+        self.action_layer2 = nn.Linear(in_features=150, out_features=250)
+        self.action_layer3 = nn.Linear(in_features=250, out_features=150)
+        self.concated_layer = nn.Linear(in_features=300, out_features=512)
+        self.fc1 = nn.Linear(in_features=512, out_features=256)
+        self.fc2 = nn.Linear(in_features=256, out_features=128)
+        self.fc3 = nn.Linear(in_features=128, out_features=1)
+        self.relu = F.relu
         self.elu = F.elu
 
-    def forward(self, current_state, action):
-        (batch_size, humans, state_dim) = current_state.shape
-        mlp1_output = self.mlp1(current_state.view(-1, state_dim)) # (500, 61) --> (500, 100)
-        mlp1_output = self.elu(mlp1_output)
-        mlp2_output = self.mlp2(action) # (100, 2) --> (100, 100)
-        mlp2_output = self.elu(mlp2_output)
-        concated = torch.cat([mlp1_output, mlp2_output.repeat(5, 1)], dim=-1) # (500, 200)
-        x = self.elu(self.mlp3(concated))
-        x = x.view(batch_size, -1)
-        x = self.fc(x)
-        return x
+    def forward(self, current_states, actions):
+        (batch_size, humans, state_dim) = current_states.shape
+        current_states = current_states.view(batch_size, -1)
+        current_states = self.state_layer1(current_states)
+        current_states = self.relu(current_states)
+        current_states = self.state_layer2(current_states)
+        current_states = self.relu(current_states)
+        current_states = self.state_layer3(current_states)
+        current_states = self.relu(current_states)
+        actions = actions.view(batch_size, -1)
+        actions = self.action_layer1(actions)
+        actions = self.relu(actions)
+        actions = self.action_layer2(actions)
+        actions = self.relu(actions)
+        actions = self.action_layer3(actions)
+        actions = self.relu(actions)
+        concated = torch.cat((current_states, actions), dim=1)
+        x = self.concated_layer(concated)
+        x = self.fc1(x)
+        x = self.fc2(x)
+        x = self.fc3(x)
+        return self.elu(x)
 
 
 class Chris(MultiHumanRL):
@@ -119,7 +158,7 @@ class Chris(MultiHumanRL):
         super().__init__()
         self.name = 'Chris'
         self.action_space = build_action_space().to(self.device)
-        self.action_dim = len(self.action_space)
+        self.action_dim = len(self.action_space)-1
         self.state_dim = 13*5
         self.model = None
         self.target_model = None
@@ -138,10 +177,8 @@ class Chris(MultiHumanRL):
         self.policy_model = ValueNetwork(self.input_dim(), self.self_state_dim, mlp1_dims, mlp2_dims, mlp3_dims,
                                   attention_dims, with_global_state, self.cell_size, self.cell_num)
 
-        self.fwd_model = ForwardDynamicsNetwork(self.input_dim(), self.action_dim, [150, 64], [100, 64],
-                                                [128, self.input_dim()])
-        self.statistics_model = StatisticsNetwork(self.input_dim(), self.self_state_dim, [150, 100], [150, 100],
-                                                  [200, 1024])
+        self.fwd_model = ForwardDynamicsNetwork(self.input_dim(), self.action_dim)
+        self.statistics_model = StatisticsNetwork(self.input_dim(), self.action_dim)
         self.multiagent_training = config.getboolean('sarl', 'multiagent_training')
         if self.with_om:
             self.name = 'OM-Chris'
@@ -184,7 +221,7 @@ class Chris(MultiHumanRL):
             raise AttributeError('Epsilon attribute has to be set in training phase')
 
         if self.reach_destination(state):
-            return ActionXY(0, 0) if self.kinematics == 'holonomic' else ActionRot(0, 0)
+            return ActionXY(0, 0)
         if self.action_space is None:
             build_action_space()
 
