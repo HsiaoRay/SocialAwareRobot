@@ -23,7 +23,7 @@ class EmpowermentTrainer(object):
                  rl_learning_rate_q=0.001,
                  rl_learning_rate_s=0.001,
                  rl_learning_rate_fwd=0.001,
-                 intrinsic_param = 0.0025,
+                 intrinsic_param = 0.025,
                  n_epochs=50):
         """
         Train the trainable model of a policy
@@ -39,7 +39,7 @@ class EmpowermentTrainer(object):
         self.rl_learning_rate_fwd = rl_learning_rate_fwd
         self.criterion_q = nn.MSELoss().to(device)
         self.criterion_fwd = nn.MSELoss().to(device)
-        self.criterion_statistics = nn.MSELoss().to(device)
+        self.criterion_statistics = nn.KLDivLoss().to(device)
         self.n_epochs = n_epochs
         self.policy_model = policy_model.to(self.device)
         self.statistics_model = statistics_model.to(self.device)
@@ -93,9 +93,9 @@ class EmpowermentTrainer(object):
             logging.info('Epoch: {:.2f}, '
                          'Time: {:.2f}, '
                          'Rewards: {:.2f}, '
-                         'Augmented rewards: {:.2f}, '
-                         'loss statistics: {:.4f}, '
-                         'loss forward: {:.4f}, '
+                         'Augmented rewards: {:.6f}, '
+                         'loss statistics: {:.6f}, '
+                         'loss forward: {:.6f}, '
                          'loss policy: {:.4f},'.
                          format(epoch, time.time() - start_time, torch.mean(rewards), torch.mean(augmented_rewards),
                                 losses_statistics, losses_forward, losses_policy))
@@ -172,7 +172,8 @@ class EmpowermentTrainer(object):
         p_sa = self.statistics_model(new_states, action_ids)
         p_s_a = self.statistics_model(new_state_marginals, action_ids)
 
-        lower_bound = self.criterion_statistics(-p_sa, p_s_a)
+        #lower_bound = self.criterion_statistics(p_sa, p_s_a)
+        lower_bound = -F.softplus(-torch.mean(p_sa[:])) - F.softplus(torch.mean(p_s_a[:]))
         mutual_information = F.softplus(p_sa) - F.softplus(p_s_a)
 
         # Maximize the mutual information
