@@ -341,6 +341,7 @@ class CrowdSim(gym.Env):
 
             plt.legend([robot], ['Robot'], fontsize=16)
             plt.show()
+
         elif mode == 'video':
             fig, ax = plt.subplots(figsize=(7, 7))
             ax.tick_params(labelsize=16)
@@ -471,6 +472,46 @@ class CrowdSim(gym.Env):
                 anim.save(output_file, writer=writer)
             else:
                 plt.show()
+
+    def render_k_tests(self, test_num, n_tests):
+        def init():
+            self.resolution = 0.5
+            fig, ax = plt.subplots(figsize=(7, 7))
+            ax.tick_params(labelsize=16)
+            self.ax = ax
+            self.rows = []
+            self.cols = []
+            self.screen_width = 24
+            self.rows.append(-self.screen_width/2 + 1)
+            self.rows.append(self.screen_width/2 + 1)
+            self.cols.append(-self.screen_width/2 + 1)
+            self.cols.append(self.screen_width/2 + 1)
+
+
+        def finalize():
+            self.ax.hist2d(self.cols, self.rows, bins=self.screen_width / self.resolution)
+            self.ax.set_xlim(-self.screen_width/2, self.screen_width/2)
+            self.ax.set_ylim(-self.screen_width/2, self.screen_width/2)
+            plt.show()
+
+        def update():
+            humans_and_dogs = self.humans + self.dogs
+            human_positions = [[self.states[i][1][j].position for j in range(len(humans_and_dogs))]
+                               for i in range(len(self.states))]
+            for i_human in range(len(humans_and_dogs)):
+                for time in range(len(self.states)):
+                    if time % 1 == 0 or time == len(self.states) - 1:
+                        positions_human = human_positions[time][i_human]
+                        row = positions_human[1] / self.resolution
+                        col = positions_human[0] / self.resolution
+                        if -self.screen_width/2 <= row <= self.screen_width/2 and -self.screen_width/2 <= col <= self.screen_width/2:
+                            self.rows.append(row)
+                            self.cols.append(col)
+        if test_num == 0:
+            init()
+        update()
+        if test_num == (n_tests - 1):
+            finalize()
 
     def generate_random_human_position(self, human_num, rule):
         """
