@@ -113,6 +113,7 @@ class CrowdSim(gym.Env):
 
         counter_offset = {'train': self.case_capacity['val'] + self.case_capacity['test'],
                           'val': 0, 'test': self.case_capacity['val']}
+
         self.robot.set(0, -self.circle_radius, 0, self.circle_radius, 0, 0, np.pi / 2)
         if self.case_counter[phase] >= 0:
             np.random.seed(counter_offset[phase] + self.case_counter[phase])
@@ -127,8 +128,10 @@ class CrowdSim(gym.Env):
             self.generate_obstacle()
         else:
             assert phase == 'test'
-            if self.case_counter[phase] == -1:
-                envBuilder = EnvBuilder(self.config)
+            if -3 < self.case_counter[phase] < 0:
+                if self.case_counter[phase] == -2:
+                    self.robot.set(0, 0, 0, self.circle_radius, 0, 0, np.pi / 2)
+                envBuilder = EnvBuilder(self.config, self.case_counter[phase])
                 humans, dogs, obstacles = envBuilder.get_data()
                 self.agent_num = len(humans) + len(dogs) + len(obstacles)
                 self.human_num = len(humans)
@@ -342,7 +345,7 @@ class CrowdSim(gym.Env):
             plt.legend([robot], ['Robot'], fontsize=16)
             plt.show()
 
-        elif mode == 'video':
+        elif mode in ['video', 'snapshots']:
             fig, ax = plt.subplots(figsize=(7, 7))
             ax.tick_params(labelsize=16)
             ax.set_xlim(-6, 6)
@@ -429,6 +432,8 @@ class CrowdSim(gym.Env):
                         attention_scores[i].set_text('human {}: {:.2f}'.format(i, self.attention_weights[frame_num][i]))
 
                 time.set_text('Time: {:.2f}'.format(frame_num * self.time_step))
+                if mode == 'snapshots' and frame_num * self.time_step % 1 == 0:
+                    plt.savefig('snapshot_{}.png'.format(int(frame_num * self.time_step)))
 
             def plot_value_heatmap():
                 assert self.robot.kinematics == 'holonomic'
@@ -466,7 +471,7 @@ class CrowdSim(gym.Env):
             anim = animation.FuncAnimation(fig, update, frames=len(self.states), interval=self.time_step * 1000)
             anim.running = True
 
-            if output_file is not None:
+            if output_file is not None and mode == 'video':
                 ffmpeg_writer = animation.writers['ffmpeg']
                 writer = ffmpeg_writer(fps=8, metadata=dict(artist='Me'), bitrate=1800)
                 anim.save(output_file, writer=writer)
@@ -487,7 +492,6 @@ class CrowdSim(gym.Env):
             self.cols.append(-self.screen_width/2 + 1)
             self.cols.append(self.screen_width/2 + 1)
 
-
         def finalize():
             self.ax.hist2d(self.cols, self.rows, bins=self.screen_width / self.resolution)
             self.ax.set_xlim(-self.screen_width/2, self.screen_width/2)
@@ -501,6 +505,8 @@ class CrowdSim(gym.Env):
             for i_human in range(len(humans_and_dogs)):
                 for time in range(len(self.states)):
                     if time % 1 == 0 or time == len(self.states) - 1:
+                        if time * self.time_step > 8:
+                            break
                         positions_human = human_positions[time][i_human]
                         row = positions_human[1] / self.resolution
                         col = positions_human[0] / self.resolution

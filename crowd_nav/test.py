@@ -90,7 +90,7 @@ def main():
     policy.set_env(env)
     robot.print_info()
     if args.visualize:
-        if args.vis_type in ['traj', 'video']:
+        if args.vis_type in ['traj', 'video', 'snapshots']:
             ob = env.reset(args.phase, args.test_case)
             done = False
             last_pos = np.array(robot.get_position())
@@ -101,13 +101,14 @@ def main():
                 current_pos = np.array(robot.get_position())
                 logging.debug('Speed: %.2f', np.linalg.norm(current_pos - last_pos) / robot.time_step)
                 last_pos = current_pos
-            env.render(args.visualization, args.video_file)
+            env.render(args.vis_type, args.video_file)
             logging.info('It takes %.2f seconds to finish. Final status is %s', env.global_time, info)
             if robot.visible and isinstance(info, ReachGoal):
                 human_times = env.get_human_times()
                 logging.info('Average time for humans to reach goal: %.2f', sum(human_times) / len(human_times))
         elif args.vis_type == 'density':
-            n_tests = 10
+            n_tests = 100
+            n_reached_goal = 0
             for test_num in range(n_tests):
                 ob = env.reset(args.phase, test_num)
                 done = False
@@ -120,8 +121,10 @@ def main():
                     logging.debug('Speed: %.2f', np.linalg.norm(current_pos - last_pos) / robot.time_step)
                     last_pos = current_pos
                 if isinstance(info, ReachGoal):
+                    n_reached_goal += 1
                     env.render_k_tests(test_num, n_tests)
-                logging.info('It takes %.2f seconds to finish. Final status is %s. Progress is %.f%%', env.global_time, info, (test_num + 1) / n_tests * 100)
+                logging.info('It takes %.2f seconds to finish. Final status is %s. Progress is %.f%%. Success rate is %.f%%.', env.global_time, info, (test_num + 1) / n_tests * 100,
+                             (n_reached_goal + 1) / (test_num + 1) * 100)
     else:
         explorer.run_k_episodes(env.case_size[args.phase], args.phase, print_failure=True)
 

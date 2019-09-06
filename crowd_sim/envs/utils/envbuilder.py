@@ -1,24 +1,34 @@
+import numpy as np
 from crowd_sim.envs.utils.human import Human
 from crowd_sim.envs.utils.dog import Dog
 from crowd_sim.envs.utils.obstacle import Obstacle
-from crowd_sim.envs.utils.robot import Robot
 
 class EnvBuilder():
-    def __init__(self, config):
+    def __init__(self, config, test_case):
         self.humans = []
         self.dogs = []
         self.obstacles = []
         self.config = config
+        self.test_case = test_case
 
     def set_humans(self):
-        human_settings = [
-            # activate, px, py, gx, gy, vx, vy
-            [True,  3.5, 0.0, -3.5, 0.0, 0.0, 0.0, 0.0],
-            [True, 4.5, 1.0, -4.0, 1.0, 0.0, 0.0, 0.0],
-            [True, 4.5, 2, -4.0, 2, 0.0, 0.0, 0.0],
-            [True, 4.5, 3.0, -4.0, 3.0, 0.0, 0.0, 0.0],
-            [False, 5.0, 3.0, -6.5, 3.0, 0.0, 0.0, 0.0],
-        ]
+        if self.test_case == -1:
+            human_settings = [
+                # activate, px, py, gx, gy, vx, vy
+                [True,  3.5, 0.0, -3.5, 0.0, 0.0, 0.0, 0.0],
+                [True, 4.5, 1.0, -4.0, 1.0, 0.0, 0.0, 0.0],
+                [True, 4.5, 2, -4.0, 2, 0.0, 0.0, 0.0],
+                [True, 4.5, 3.0, -4.0, 3.0, 0.0, 0.0, 0.0],
+                [False, 5.0, 3.0, -6.5, 3.0, 0.0, 0.0, 0.0],
+            ]
+
+        if self.test_case == -2:
+            radius = 1.0
+            human_settings = []
+            for i_human in range(5):
+                angle = 2 * np.pi / 5 * i_human
+                setting = [True, radius * np.sin(angle), radius * np.cos(angle), radius * np.sin(angle), radius * np.cos(angle), 0.0, 0.0, 0.0]
+                human_settings.append(setting)
 
         for human_setting in human_settings:
             if human_setting[0]:
@@ -59,22 +69,23 @@ class EnvBuilder():
                 self.dogs.append(dog)
 
     def set_obstacles(self):
-        obstacle_settings = [
-            # activate, px, py
-            [True, 0, 0],
-            [False, 0, -10],
-            [False, 0, -10],
-            [False, 0, -10],
-            [False, 0, -10]
-        ]
+        if self.test_case == -1:
+            obstacle_settings = [
+                # activate, px, py
+                [True, 0, 0],
+                [False, 0, -10],
+                [False, 0, -10],
+                [False, 0, -10],
+                [False, 0, -10]
+            ]
 
-        for obstacle_setting in obstacle_settings:
-            if obstacle_setting[0]:
-                obstacle = Obstacle()
-                px = obstacle_setting[1]
-                py = obstacle_setting[2]
-                obstacle.set_position((px, py))
-                self.obstacles.append(obstacle)
+            for obstacle_setting in obstacle_settings:
+                if obstacle_setting[0]:
+                    obstacle = Obstacle()
+                    px = obstacle_setting[1]
+                    py = obstacle_setting[2]
+                    obstacle.set_position((px, py))
+                    self.obstacles.append(obstacle)
 
     def get_data(self):
         self.set_humans()
