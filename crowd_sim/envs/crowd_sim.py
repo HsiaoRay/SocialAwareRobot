@@ -492,6 +492,7 @@ class CrowdSim(gym.Env):
             self.cols.append(-self.screen_width/2 + 1)
             self.cols.append(self.screen_width/2 + 1)
 
+
         def finalize():
             self.ax.hist2d(self.cols, self.rows, bins=self.screen_width / self.resolution)
             self.ax.set_xlim(-self.screen_width/2, self.screen_width/2)
