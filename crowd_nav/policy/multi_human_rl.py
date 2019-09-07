@@ -115,17 +115,25 @@ class MultiHumanRL(CADRL):
     def input_dim(self):
         return self.joint_state_dim + (self.cell_num ** 2 * self.om_channel_size if self.with_om else 0)
 
-    def visualize_grid(self, occupancy_map):
-        fig, ax = plt.subplots(figsize=(7, 7), num=2)
-        print(occupancy_map)
+    def visualize_dm(self, dm):
+
+        fig, ax = plt.subplots(1, 3, figsize=(7, 7), num=2)
+        dm = np.asarray(dm)
+        dm = dm.reshape(16, 3).T
+
+        for i, occupancy_map in enumerate(dm):
+            grid = np.zeros_like(occupancy_map)
+            grid[occupancy_map == True] = 1
+            grid = grid.reshape(self.cell_num, self.cell_num)
+            ax[i].imshow(grid)
+            plt.pause(.1)
+
+    def visualize_om(self, occupancy_map):
+
+        fig, ax = plt.subplots(figsize=(7, 7), num=3)
         grid = np.zeros_like(occupancy_map)
         grid[occupancy_map == True] = 1
         grid = grid.reshape(self.cell_num, self.cell_num)
-        for row in grid:
-            for col in row:
-                if col > 0:
-                    print(col)
-
         ax.imshow(grid)
         plt.pause(.1)
 
@@ -160,7 +168,7 @@ class MultiHumanRL(CADRL):
             other_y_index[other_y_index >= self.cell_num] = float('-inf')
             grid_indices = self.cell_num * other_y_index + other_x_index
             occupancy_map = np.isin(range(self.cell_num ** 2), grid_indices)
-            self.visualize_grid(occupancy_map)
+            #self.visualize_om(occupancy_map)
             if self.om_channel_size == 1:
                 occupancy_maps.append([occupancy_map.astype(int)])
             else:
@@ -184,7 +192,7 @@ class MultiHumanRL(CADRL):
                             raise NotImplementedError
                 for i, cell in enumerate(dm):
                     dm[i] = sum(dm[i]) / len(dm[i]) if len(dm[i]) != 0 else 0
-
+                #self.visualize_dm(dm)
                 occupancy_maps.append([dm])
 
         return torch.from_numpy(np.concatenate(occupancy_maps, axis=0)).float()
