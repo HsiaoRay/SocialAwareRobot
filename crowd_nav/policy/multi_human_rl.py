@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import matplotlib.pyplot as plt
 from crowd_sim.envs.utils.action import ActionRot, ActionXY
 from crowd_sim.envs.utils.state import ObservableState
 from crowd_nav.policy.cadrl import CADRL
@@ -114,7 +115,23 @@ class MultiHumanRL(CADRL):
     def input_dim(self):
         return self.joint_state_dim + (self.cell_num ** 2 * self.om_channel_size if self.with_om else 0)
 
+    def visualize_grid(self, occupancy_map):
+        fig, ax = plt.subplots(figsize=(7, 7), num=2)
+        print(occupancy_map)
+        grid = np.zeros_like(occupancy_map)
+        grid[occupancy_map == True] = 1
+        grid = grid.reshape(self.cell_num, self.cell_num)
+        for row in grid:
+            for col in row:
+                if col > 0:
+                    print(col)
+
+        ax.imshow(grid)
+        plt.pause(.1)
+
     def build_occupancy_maps(self, human_states):
+
+
         """
 
         :param human_states:
@@ -143,6 +160,7 @@ class MultiHumanRL(CADRL):
             other_y_index[other_y_index >= self.cell_num] = float('-inf')
             grid_indices = self.cell_num * other_y_index + other_x_index
             occupancy_map = np.isin(range(self.cell_num ** 2), grid_indices)
+            self.visualize_grid(occupancy_map)
             if self.om_channel_size == 1:
                 occupancy_maps.append([occupancy_map.astype(int)])
             else:
@@ -159,13 +177,14 @@ class MultiHumanRL(CADRL):
                             dm[2 * int(index)].append(other_vx[i])
                             dm[2 * int(index) + 1].append(other_vy[i])
                         elif self.om_channel_size == 3:
-                            dm[2 * int(index)].append(1)
-                            dm[2 * int(index) + 1].append(other_vx[i])
-                            dm[2 * int(index) + 2].append(other_vy[i])
+                            dm[3 * int(index)].append(1)
+                            dm[3 * int(index) + 1].append(other_vx[i])
+                            dm[3 * int(index) + 2].append(other_vy[i])
                         else:
                             raise NotImplementedError
                 for i, cell in enumerate(dm):
                     dm[i] = sum(dm[i]) / len(dm[i]) if len(dm[i]) != 0 else 0
+
                 occupancy_maps.append([dm])
 
         return torch.from_numpy(np.concatenate(occupancy_maps, axis=0)).float()
