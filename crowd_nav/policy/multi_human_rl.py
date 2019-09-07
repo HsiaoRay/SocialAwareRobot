@@ -122,9 +122,7 @@ class MultiHumanRL(CADRL):
         dm = dm.reshape(16, 3).T
 
         for i, occupancy_map in enumerate(dm):
-            grid = np.zeros_like(occupancy_map)
-            grid[occupancy_map == True] = 1
-            grid = grid.reshape(self.cell_num, self.cell_num)
+            grid = occupancy_map.reshape(self.cell_num, self.cell_num)
             ax[i].imshow(grid)
             plt.pause(.1)
 
