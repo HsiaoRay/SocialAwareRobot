@@ -418,6 +418,7 @@ class CrowdSim(gym.Env):
                 nonlocal arrows
                 global_step = frame_num
                 robot.center = robot_positions[frame_num]
+
                 for i, human in enumerate(humans_and_dogs):
                     human.center = human_and_dog_positions[frame_num][i]
                     human_and_dog_numbers[i].set_position((human.center[0] - x_offset, human.center[1] - y_offset))
@@ -427,9 +428,13 @@ class CrowdSim(gym.Env):
                                                       arrowstyle=arrow_style) for orientation in orientations]
                     for arrow in arrows:
                         ax.add_artist(arrow)
+                    max_weight = max(self.attention_weights[frame_num])
+                    min_weigth = min(self.attention_weights[frame_num])
+                    delta = max_weight - min_weigth - .001 # prevent NaN
                     if self.attention_weights is not None:
-                        human.set_color(str(self.attention_weights[frame_num][i]))
-                        attention_scores[i].set_text('human {}: {:.2f}'.format(i, self.attention_weights[frame_num][i]))
+                        attention_weight_normalized = (self.attention_weights[frame_num][i] - min_weigth) / delta
+                        human.set_color(str(attention_weight_normalized))
+                        attention_scores[i].set_text('human {}: {:.2f}'.format(i, attention_weight_normalized))
 
                 time.set_text('Time: {:.2f}'.format(frame_num * self.time_step))
                 if mode == 'snapshots' and frame_num * self.time_step % 1 == 0:
@@ -481,7 +486,7 @@ class CrowdSim(gym.Env):
     def render_k_tests(self, test_num, n_tests):
         def init():
             self.resolution = 0.5
-            fig, ax = plt.subplots(figsize=(7, 7))
+            fig, ax = plt.subplots(figsize=(7, 7), num=1)
             ax.tick_params(labelsize=16)
             self.ax = ax
             self.rows = []
@@ -491,7 +496,6 @@ class CrowdSim(gym.Env):
             self.rows.append(self.screen_width/2 + 1)
             self.cols.append(-self.screen_width/2 + 1)
             self.cols.append(self.screen_width/2 + 1)
-
 
         def finalize():
             self.ax.hist2d(self.cols, self.rows, bins=self.screen_width / self.resolution)
