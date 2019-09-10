@@ -128,7 +128,7 @@ class CrowdSim(gym.Env):
             self.generate_obstacle()
         else:
             assert phase == 'test'
-            if -3 < self.case_counter[phase] < 0:
+            if -3 <= self.case_counter[phase] < 0:
                 if self.case_counter[phase] == -2:
                     self.robot.set(0, 0, 0, self.circle_radius, 0, 0, np.pi / 2)
                 envBuilder = EnvBuilder(self.config, self.case_counter[phase])

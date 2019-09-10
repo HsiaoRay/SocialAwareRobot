@@ -30,6 +30,16 @@ class EnvBuilder():
                 setting = [True, radius * np.sin(angle), radius * np.cos(angle), radius * np.sin(angle), radius * np.cos(angle), 0.0, 0.0, 0.0]
                 human_settings.append(setting)
 
+        if self.test_case == -3:
+            human_settings = [
+                # activate, px, py, gx, gy, vx, vy
+                [True,  -3.5, -3.5, 3.5, 3.5, 0.0, 0.0, 0.0, 0.0],
+                [True, -10., -10., -10., -10., 0.0, 0.0, 0.0],
+                [False, 4.5, 2, -4.0, 2, 0.0, 0.0, 0.0],
+                [False, 4.5, 3.0, -4.0, 3.0, 0.0, 0.0, 0.0],
+                [False, 5.0, 3.0, -6.5, 3.0, 0.0, 0.0, 0.0],
+            ]
+
         for human_setting in human_settings:
             if human_setting[0]:
                 human = Human(self.config, 'humans')
