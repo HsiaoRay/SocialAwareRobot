@@ -163,6 +163,32 @@ class CrowdSim(gym.Env):
     def onestep_lookahead(self, action):
         return self.step(action, update=False)
 
+    def step_humans(self):
+        # observe
+        human_actions = []
+        for human in self.humans:
+            # observation for humans is always coordinates
+            ob = [other_human.get_observable_state() for other_human in (self.humans + self.dogs) if other_human != human]
+            if self.robot.visible:
+                ob += [self.robot.get_observable_state()]
+            ob += [obstacle.get_shape() for obstacle in self.obstacles]
+            human_actions.append(human.act(ob))
+        self.global_time += self.time_step
+
+        # act
+        for i, human_action in enumerate(human_actions):
+            self.humans[i].step(human_action, self.global_time)
+
+        reached_destinations = True
+        for i, human in enumerate(self.humans):
+            # only record the first time the human reaches the goal
+            if human.reached_destination():
+                continue
+            else:
+                reached_destinations = False
+
+        return reached_destinations
+
     def step(self, action, update=True):
         """
         Compute actions for all agents, detect collision, update environment and return (ob, reward, done, info)

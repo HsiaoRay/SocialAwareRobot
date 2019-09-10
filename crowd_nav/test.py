@@ -11,7 +11,7 @@ from crowd_sim.envs.utils.robot import Robot
 from crowd_sim.envs.policy.orca import ORCA
 from crowd_sim.envs.utils.action import ActionXY
 from crowd_sim.envs.utils.info import *
-from crowd_nav.utils.plot import distribution_humans
+from crowd_nav.utils.plot import distribution_seperation_distance, distribution_human_path_lengths
 
 
 def main():
@@ -109,16 +109,18 @@ def main():
                 logging.info('Average time for humans to reach goal: %.2f', sum(human_times) / len(human_times))
         elif args.vis_type == '2d_histogram' or args.vis_type == 'distance_distribution':
             env.discomfort_dist = 0.5
-            n_tests = 50
+            n_tests = 2
             n_reached_goal = 0
             n_too_close = 0
             min_dist = []
+            hum_travel_dist = [[] for _ in range(env.human_num)]
             times = []
 
             for test_num in range(n_tests):
                 ob = env.reset(args.phase, test_num)
                 done = False
                 last_pos = np.array(robot.get_position())
+                hum_displacements = [[] for _ in range(env.human_num)]
                 while not done:
                     action = robot.act(ob)
                     action = ActionXY(action[0], action[1])
@@ -127,6 +129,10 @@ def main():
                     logging.debug('Speed: %.2f', np.linalg.norm(current_pos - last_pos) / robot.time_step)
                     last_pos = current_pos
 
+                    for i, human in enumerate(env.humans):
+                        hum_speed = (human.vx ** 2 + human.vy ** 2) ** .5
+                        hum_displacements[i].append(hum_speed * env.time_step)
+
                     if isinstance(info, Danger):
                         n_too_close += 1
                         min_dist.append(info.min_dist)
@@ -134,10 +140,19 @@ def main():
                 if isinstance(info, ReachGoal):
                     n_reached_goal += 1
                     times.append(env.global_time)
+                    while not env.step_humans():
+                        logging.info('Running until all humans reach goals, %.2f', env.global_time)
+                        for i, human in enumerate(env.humans):
+                            hum_speed = (human.vx ** 2 + human.vy ** 2) ** .5
+                            hum_displacements[i].append(hum_speed * env.time_step)
+
+                    for i, human in enumerate(env.humans):
+                        hum_travel_dist[i].append(sum(hum_displacements[i]))
 
                 logging.info('Test %s takes %.2f seconds to finish. Final status is %s.', test_num, env.global_time, info)
 
-            distribution_humans(min_dist, n_tests)
+            distribution_seperation_distance(min_dist)
+            distribution_human_path_lengths(hum_travel_dist)
 
     else:
         explorer.run_k_episodes(env.case_size[args.phase], args.phase, print_failure=True)
