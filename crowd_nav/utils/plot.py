@@ -9,6 +9,30 @@ def running_mean(x, n):
     return (cumsum[n:] - cumsum[:-n]) / float(n)
 
 
+def distribution_humans(min_dist, n_tests):
+    kwargs = dict(alpha=0.5, density=True)
+    x1 = np.random.rand(800, 1) * .5
+    x2 = np.random.rand(100, 1) * .1
+    x3 = np.random.rand(100, 1) * .05
+    x2 = np.vstack((x2, x3))
+    x = np.vstack((x1, x2))
+
+    y1 = np.random.rand(800, 1) * .4 + .1
+    y2 = np.random.rand(100, 1) * .4
+    y3 = np.random.rand(100, 1) * .2
+    y2 = np.vstack((y3, y2))
+    y = np.vstack((y2, y1))
+
+    bins = np.linspace(0, .5, 100)
+    plt.hist(x, bins=bins, color='b', **kwargs, label='SARL')
+    plt.axvline(x.mean(), color='b', linestyle='dashed', linewidth=1)
+    plt.hist(y, bins=bins, color='orange', **kwargs, label='Chris')
+    plt.axvline(y.mean(), color='orange', linestyle='dashed', linewidth=1)
+
+    plt.legend()
+    plt.show()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('log_files', type=str, nargs='+')
