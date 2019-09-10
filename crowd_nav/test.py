@@ -28,7 +28,7 @@ def main():
     parser.add_argument('--square', default=False, action='store_true')
     parser.add_argument('--circle', default=False, action='store_true')
     parser.add_argument('--video_file', type=str, default=None)
-    parser.add_argument('--vis_type', type=str, default='snapshots')
+    parser.add_argument('--vis_type', type=str, default='video')
     args = parser.parse_args()
 
     if args.model_dir is not None:
