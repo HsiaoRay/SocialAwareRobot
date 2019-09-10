@@ -28,7 +28,7 @@ def main():
     parser.add_argument('--square', default=False, action='store_true')
     parser.add_argument('--circle', default=False, action='store_true')
     parser.add_argument('--video_file', type=str, default=None)
-    parser.add_argument('--vis_type', type=str, default='video')
+    parser.add_argument('--vis_type', type=str, default='distance_distribution')
     args = parser.parse_args()
 
     if args.model_dir is not None:
@@ -108,11 +108,12 @@ def main():
                 human_times = env.get_human_times()
                 logging.info('Average time for humans to reach goal: %.2f', sum(human_times) / len(human_times))
         elif args.vis_type == '2d_histogram' or args.vis_type == 'distance_distribution':
-            env.discomfort_dist = .5
-            n_tests = 100
+            env.discomfort_dist = 0.5
+            n_tests = 50
             n_reached_goal = 0
             n_too_close = 0
             min_dist = []
+            times = []
 
             for test_num in range(n_tests):
                 ob = env.reset(args.phase, test_num)
@@ -125,19 +126,17 @@ def main():
                     current_pos = np.array(robot.get_position())
                     logging.debug('Speed: %.2f', np.linalg.norm(current_pos - last_pos) / robot.time_step)
                     last_pos = current_pos
+
+                    if isinstance(info, Danger):
+                        n_too_close += 1
+                        min_dist.append(info.min_dist)
+
                 if isinstance(info, ReachGoal):
                     n_reached_goal += 1
+                    times.append(env.global_time)
 
-                env.render_k_tests(test_num, n_tests)
+                logging.info('Test %s takes %.2f seconds to finish. Final status is %s.', test_num, env.global_time, info)
 
-                if isinstance(info, Danger):
-                    print(info.min_dist)
-                    n_too_close += 1
-                    min_dist.append(info.min_dist)
-
-                if n_reached_goal != 0 and test_num != 0:
-                    logging.info('It takes %.2f seconds to finish. Final status is %s. Progress is %.f%%. Success rate is %.f%%.', env.global_time, info, ((test_num - 1 )/ n_tests) * 100,
-                                 (n_reached_goal / test_num - 1) * 100)
             distribution_humans(min_dist, n_tests)
 
     else:
