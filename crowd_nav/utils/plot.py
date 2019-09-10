@@ -10,21 +10,22 @@ def running_mean(x, n):
 
 
 def distribution_seperation_distance(min_dist):
+    fig, ax = plt.subplots(figsize=(7, 7), num=10)
     kwargs = dict(alpha=0.5, density=True)
     bins = np.linspace(0, .5, 100)
     min_dist = np.asarray(min_dist)
-    plt.hist(min_dist, bins=bins, color='b', **kwargs)
-    plt.axvline(min_dist.mean(), color='b', linestyle='dashed', linewidth=1)
+    ax.hist(min_dist, bins=bins, color='b', **kwargs)
+    ax.axvline(min_dist.mean(), color='b', linestyle='dashed', linewidth=1)
     plt.show()
 
 
 def distribution_human_path_lengths(l):
+    fig, ax = plt.subplots(figsize=(7, 7), num=11)
     kwargs = dict(alpha=0.5, density=True)
-
     path_lengths = [item for sublist in l for item in sublist]
     array_path_lengths = np.asarray(path_lengths)
-    plt.hist(array_path_lengths, bins=10, color='b', **kwargs)
-    plt.axvline(array_path_lengths.mean(), color='b', linestyle='dashed', linewidth=1)
+    ax.hist(array_path_lengths, bins=10, color='b', **kwargs)
+    ax.axvline(array_path_lengths.mean(), color='b', linestyle='dashed', linewidth=1)
     plt.show()
 
 
