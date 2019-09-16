@@ -61,8 +61,6 @@ def main():
         if args.model_dir is None:
             parser.error('Trainable policy must be specified with a model weights directory')
         policy.get_policy_model().load_state_dict(torch.load(policy_model_weight_file, map_location=device))
-        policy.get_statistics_model().load_state_dict(torch.load(statistics_model_weight_file, map_location=device))
-        policy.get_fwd_model().load_state_dict(torch.load(forward_dynamics_model_weight_file, map_location=device))
 
     # configure environment
     env_config = configparser.RawConfigParser()
