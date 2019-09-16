@@ -339,6 +339,9 @@ class CrowdSim(gym.Env):
                 obs = plt.Circle(obstacle.get_position(), obstacle.radius, fill=True, color='g')
                 ax.add_artist(obs)
 
+            goal = mlines.Line2D([0], [4], color=goal_color, marker='*', linestyle='None', markersize=15, label='Goal')
+            ax.add_artist(goal)
+
             for k in range(len(self.states)):
                 if k % 4 == 0 or k == len(self.states) - 1:
                     robot = plt.Circle(robot_positions[k], self.robot.radius, fill=True, color=robot_color)
@@ -368,7 +371,7 @@ class CrowdSim(gym.Env):
                     for human_direction in human_directions:
                         ax.add_artist(human_direction)
 
-            plt.legend([robot], ['Robot'], fontsize=16)
+            plt.legend([robot, goal], ['Robot', 'Goal'], fontsize=16)
             plt.show()
 
         elif mode in ['video', 'snapshots']:
