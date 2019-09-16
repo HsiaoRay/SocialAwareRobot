@@ -28,7 +28,7 @@ def main():
     parser.add_argument('--square', default=False, action='store_true')
     parser.add_argument('--circle', default=False, action='store_true')
     parser.add_argument('--video_file', type=str, default=None)
-    parser.add_argument('--vis_type', type=str, default='traj')
+    parser.add_argument('--vis_type', type=str, default='distribution')
     args = parser.parse_args()
 
     if args.model_dir is not None:
@@ -103,22 +103,22 @@ def main():
             env.render(args.vis_type, args.video_file)
             logging.info('It takes %.2f seconds to finish. Final status is %s', env.global_time, info)
             if robot.visible and isinstance(info, ReachGoal):
-                human_times = env.get_human_times()
+                (human_times, human_distances) = env.get_human_times()
                 logging.info('Average time for humans to reach goal: %.2f', sum(human_times) / len(human_times))
-        elif args.vis_type == '2d_histogram' or args.vis_type == 'distance_distribution':
+        elif args.vis_type == 'distribution':
             env.discomfort_dist = 0.5
-            n_tests = 100
+            n_tests = 1
             n_reached_goal = 0
             n_too_close = 0
             min_dist = []
-            hum_travel_dist = [[] for _ in range(env.human_num)]
+            hum_travel_dist = []
+            hum_travel_time = []
             times = []
 
             for test_num in range(n_tests):
                 ob = env.reset(args.phase, test_num)
                 done = False
                 last_pos = np.array(robot.get_position())
-                hum_displacements = [[] for _ in range(env.human_num)]
                 while not done:
                     action = robot.act(ob)
                     action = ActionXY(action[0], action[1])
@@ -127,10 +127,6 @@ def main():
                     logging.debug('Speed: %.2f', np.linalg.norm(current_pos - last_pos) / robot.time_step)
                     last_pos = current_pos
 
-                    for i, human in enumerate(env.humans):
-                        hum_speed = (human.vx ** 2 + human.vy ** 2) ** .5
-                        hum_displacements[i].append(hum_speed * env.time_step)
-
                     if isinstance(info, Danger):
                         n_too_close += 1
                         min_dist.append(info.min_dist)
@@ -138,17 +134,13 @@ def main():
                 if isinstance(info, ReachGoal):
                     n_reached_goal += 1
                     times.append(env.global_time)
-                    while not env.step_humans():
-                        logging.info('Running until all humans reach goals, %.2f', env.global_time)
-                        for i, human in enumerate(env.humans):
-                            hum_speed = (human.vx ** 2 + human.vy ** 2) ** .5
-                            hum_displacements[i].append(hum_speed * env.time_step)
 
-                    for i, human in enumerate(env.humans):
-                        hum_travel_dist[i].append(sum(hum_displacements[i]))
+                    (human_times, human_distances) = env.get_human_times()
+                    hum_travel_dist.append(human_distances)
+                    hum_travel_time.append(human_times)
 
-                logging.info('Test %s takes %.2f seconds to finish. Final status is %s.', test_num, env.global_time, info)
-
+                logging.info('Test %s takes %.2f seconds to finish. Final status is %s.', test_num, env.global_time,
+                             info)
             distribution_seperation_distance(min_dist)
             distribution_human_path_lengths(hum_travel_dist)
 

@@ -34,6 +34,7 @@ class CrowdSim(gym.Env):
         self.dogs = []
         self.global_time = None
         self.human_times = None
+        self.human_distances = None
         # reward function
         self.success_reward = None
         self.collision_penalty = None
@@ -106,8 +107,10 @@ class CrowdSim(gym.Env):
         self.global_time = 0
         if phase == 'test':
             self.human_times = [0] * self.human_num
+            self.human_distances = [0] * self.human_num
         else:
             self.human_times = [0] * (self.human_num if self.robot.policy.multiagent_training else 1)
+            self.human_distances = [0] * (self.human_num if self.robot.policy.multiagent_training else 1)
         if not self.robot.policy.multiagent_training:
             self.train_val_sim = 'circle_crossing'
 
@@ -136,6 +139,7 @@ class CrowdSim(gym.Env):
                 self.agent_num = len(humans) + len(dogs) + len(obstacles)
                 self.human_num = len(humans)
                 self.human_times = [0] * len(humans)
+                self.human_distances = [0] * len(humans)
                 self.dog_num = len(dogs)
                 self.obstacle_num = len(obstacles)
                 self.humans = humans
@@ -163,31 +167,6 @@ class CrowdSim(gym.Env):
     def onestep_lookahead(self, action):
         return self.step(action, update=False)
 
-    def step_humans(self):
-        # observe
-        human_actions = []
-        for human in self.humans:
-            # observation for humans is always coordinates
-            ob = [other_human.get_observable_state() for other_human in (self.humans + self.dogs) if other_human != human]
-            if self.robot.visible:
-                ob += [self.robot.get_observable_state()]
-            ob += [obstacle.get_shape() for obstacle in self.obstacles]
-            human_actions.append(human.act(ob))
-        self.global_time += self.time_step
-
-        # act
-        for i, human_action in enumerate(human_actions):
-            self.humans[i].step(human_action, self.global_time)
-
-        reached_destinations = True
-        for i, human in enumerate(self.humans):
-            # only record the first time the human reaches the goal
-            if human.reached_destination():
-                continue
-            else:
-                reached_destinations = False
-
-        return reached_destinations
 
     def step(self, action, update=True):
         """
@@ -298,6 +277,8 @@ class CrowdSim(gym.Env):
                 # only record the first time the human reaches the goal
                 if self.human_times[i] == 0 and human.reached_destination():
                     self.human_times[i] = self.global_time
+                else:
+                    self.human_distances[i] += (human.vx ** 2 + human.vy ** 2) ** .5 * self.time_step
 
             # compute the observation
             if self.robot.sensor == 'coordinates':
@@ -632,6 +613,8 @@ class CrowdSim(gym.Env):
             for i, human in enumerate(self.humans):
                 if self.human_times[i] == 0 and human.reached_destination():
                     self.human_times[i] = self.global_time
+                else:
+                    self.human_distances[i] += (human.vx ** 2 + human.vy ** 2) ** .5 * self.time_step
 
             # for visualization
             self.robot.set_position(sim.getAgentPosition(0))
@@ -640,7 +623,7 @@ class CrowdSim(gym.Env):
             self.states.append([self.robot.get_full_state(), [human.get_full_state() for human in self.humans]])
 
         del sim
-        return self.human_times
+        return self.human_times, self.human_distances
 
     def check_collision_robot(self, agent, action, dmin):
         # collision detection

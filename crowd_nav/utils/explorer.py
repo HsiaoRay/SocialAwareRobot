@@ -1,6 +1,7 @@
 import logging
 import copy
 import torch
+import numpy as np
 from crowd_sim.envs.utils.info import *
 from crowd_sim.envs.utils.action import ActionXY
 
@@ -19,7 +20,8 @@ class EmpowermentExplorer(object):
         self.target_model = copy.deepcopy(model)
 
     # @profile
-    def run_k_episodes(self, k, phase, update_memory=False, imitation_learning=False, episode=None):
+    def run_k_episodes(self, k, phase, update_memory=False, imitation_learning=False, episode=None,
+                       print_failure=False):
         self.robot.policy.set_phase(phase)
         success_times = []
         collision_times = []
@@ -32,6 +34,9 @@ class EmpowermentExplorer(object):
         cumulative_rewards = []
         collision_cases = []
         timeout_cases = []
+        hum_travel_dist = []
+        hum_travel_time = []
+
         for i in range(k):
             ob = self.env.reset(phase)
             done = False
@@ -58,6 +63,12 @@ class EmpowermentExplorer(object):
             if isinstance(info, ReachGoal):
                 success += 1
                 success_times.append(self.env.global_time)
+
+                if phase in ['test']:
+                    (human_times, human_distances) = self.env.get_human_times()
+                    hum_travel_dist.append(average(human_distances))
+                    hum_travel_time.append(average(human_times))
+
             elif isinstance(info, Collision):
                 collision += 1
                 collision_cases.append(i)
@@ -82,10 +93,13 @@ class EmpowermentExplorer(object):
         collision_rate = collision / k
         assert success + collision + timeout == k
         avg_nav_time = sum(success_times) / len(success_times) if success_times else self.env.time_limit
+
         extra_info = '' if episode is None else 'in episode {} '.format(episode)
-        logging.info('{:<5} {}has success rate: {:.2f}, collision rate: {:.2f}, nav time: {:.2f}, total reward: {:.4f}'.
+        test_info = '' if phase not in ['test'] else ', human distance: {:.2f}, human travel time: {:.2f}'.format(average(hum_travel_dist), average(hum_travel_time))
+        logging.info('{:<5} {}has success rate: {:.2f}, collision rate: {:.3f}, '
+                     'nav time: {:.2f}, total reward: {:.4f} {}'.
                      format(phase.upper(), extra_info, success_rate, collision_rate, avg_nav_time,
-                            average(cumulative_rewards)))
+                            average(cumulative_rewards), test_info))
 
     def update_memory(self, states, actions, action_ids, rewards, imitation_learning=False):
         if self.memory is None or self.gamma is None:
