@@ -28,7 +28,7 @@ def main():
     parser.add_argument('--square', default=False, action='store_true')
     parser.add_argument('--circle', default=False, action='store_true')
     parser.add_argument('--video_file', type=str, default=None)
-    parser.add_argument('--vis_type', type=str, default='distance_distribution')
+    parser.add_argument('--vis_type', type=str, default='traj')
     args = parser.parse_args()
 
     if args.model_dir is not None:
@@ -109,7 +109,7 @@ def main():
                 logging.info('Average time for humans to reach goal: %.2f', sum(human_times) / len(human_times))
         elif args.vis_type == '2d_histogram' or args.vis_type == 'distance_distribution':
             env.discomfort_dist = 0.5
-            n_tests = 2
+            n_tests = 100
             n_reached_goal = 0
             n_too_close = 0
             min_dist = []
