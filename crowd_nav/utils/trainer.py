@@ -90,15 +90,14 @@ class EmpowermentTrainer(object):
 
                 losses_policy = self.optimize_policy(states=states, rewards=rewards, losses=losses_policy)
 
-            logging.info('Epoch: {:.2f}, '
-                         'Time: {:.2f}, '
+            logging.info('Epoch: {}, '
                          'Rewards: {:.2f}, '
-                         'Augmented rewards: {:.6f}, '
-                         'loss statistics: {:.6f}, '
-                         'loss forward: {:.6f}, '
-                         'loss policy: {:.4f},'.
-                         format(epoch, time.time() - start_time, torch.mean(rewards), torch.mean(augmented_rewards),
-                                losses_statistics, losses_forward, losses_policy))
+                         'Statistics loss: {:.6f}, '
+                         'Forward dynamics loss: {:.6f}, '
+                         'Policy loss: {:.4f}, '
+                         'Backward prop time: {:.2f}, batch_size: {}, '.
+                         format(epoch, torch.mean(rewards),
+                                losses_statistics, losses_forward, losses_policy, time.time() - start_time, self.data_loader.batch_size))
 
     def optimize_batch(self, num_batches, augment_rewards=True):
         if self.data_loader is None:
@@ -173,8 +172,8 @@ class EmpowermentTrainer(object):
         p_s_a = self.statistics_model(new_state_marginals, action_ids)
 
         #lower_bound = self.criterion_statistics(p_sa, p_s_a)
-        lower_bound = -F.softplus(-torch.mean(p_sa[:])) - F.softplus(torch.mean(p_s_a[:]))
-        mutual_information = F.softplus(p_sa) - F.softplus(p_s_a)
+        lower_bound = -(F.softplus(-torch.mean(p_sa[:])) + F.softplus(torch.mean(p_s_a[:])))
+        mutual_information = F.softplus(-p_sa) - F.softplus(p_s_a)
 
         # Maximize the mutual information
         loss = -lower_bound
