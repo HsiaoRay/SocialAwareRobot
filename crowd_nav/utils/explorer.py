@@ -24,6 +24,7 @@ class EmpowermentExplorer(object):
                        print_failure=False):
         self.robot.policy.set_phase(phase)
         success_times = []
+        nav_distances = []
         collision_times = []
         timeout_times = []
         success = 0
@@ -65,6 +66,7 @@ class EmpowermentExplorer(object):
                 success_times.append(self.env.global_time)
 
                 if phase in ['test']:
+                    nav_distances.append(sum([(action.vx ** 2 + action.vy ** 2) ** .5 * self.robot.time_step for action in actions]))
                     (human_times, human_distances) = self.env.get_human_times()
                     hum_travel_dist.append(average(human_distances))
                     hum_travel_time.append(average(human_times))
@@ -95,7 +97,7 @@ class EmpowermentExplorer(object):
         avg_nav_time = sum(success_times) / len(success_times) if success_times else self.env.time_limit
 
         extra_info = '' if episode is None else 'in episode {} '.format(episode)
-        test_info = '' if phase not in ['test'] else ', human distance: {:.2f}, human travel time: {:.2f}'.format(average(hum_travel_dist), average(hum_travel_time))
+        test_info = '' if phase not in ['test'] else ', nav distance: {},  human distance: {:.2f}, human travel time: {:.2f}'.format(average(nav_distances), average(hum_travel_dist), average(hum_travel_time))
         logging.info('{:<5} {}has success rate: {:.2f}, collision rate: {:.3f}, '
                      'nav time: {:.2f}, total reward: {:.4f} {}'.
                      format(phase.upper(), extra_info, success_rate, collision_rate, avg_nav_time,
