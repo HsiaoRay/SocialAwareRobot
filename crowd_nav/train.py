@@ -14,6 +14,7 @@ from crowd_nav.utils.trainer import EmpowermentTrainer
 from crowd_nav.utils.memory import ReplayMemory
 from crowd_nav.utils.explorer import EmpowermentExplorer
 from crowd_nav.policy.policy_factory import policy_factory
+from crowd_nav.utils.visualize_episode import visualize_episode
 
 
 def main():
@@ -26,6 +27,7 @@ def main():
     parser.add_argument('--resume', default=False, action='store_true')
     parser.add_argument('--gpu', default=False, action='store_true')
     parser.add_argument('--debug', default=False, action='store_true')
+    parser.add_argument('--output_file', type=str, default='data/')
     key = input('Dubug mode? (y/n)')
     if key == 'y':
         parser.add_argument('--train_config', type=str, default='configs/debug.config')
@@ -209,6 +211,13 @@ def main():
             explorer.update_target_model(policy_model)
 
         if episode != 0 and episode % checkpoint_interval == 0:
+            args.vis_type = 'traj'
+            args.test_case = 12
+            args.output_file = 'episode_{}.png'.format(episode)
+            robot.policy.set_phase('test')
+            visualize_episode(robot=robot, env=env, args=args)
+            robot.policy.set_phase('train')
+
             torch.save(policy_model.state_dict(), rl_policy_model_weight_file)
             torch.save(statistics_model.state_dict(), rl_statistics_model_weight_file)
             torch.save(forward_dynamics_model.state_dict(), rl_forward_dynamics_model_weight_file)

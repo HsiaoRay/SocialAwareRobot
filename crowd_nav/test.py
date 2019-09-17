@@ -12,6 +12,7 @@ from crowd_sim.envs.policy.orca import ORCA
 from crowd_sim.envs.utils.action import ActionXY
 from crowd_sim.envs.utils.info import *
 from crowd_nav.utils.plot import distribution_seperation_distance, distribution_human_path_lengths
+from crowd_nav.utils.visualize_episode import visualize_episode
 
 
 def main():
@@ -27,8 +28,8 @@ def main():
     parser.add_argument('--test_case', type=int, default=None)
     parser.add_argument('--square', default=False, action='store_true')
     parser.add_argument('--circle', default=False, action='store_true')
-    parser.add_argument('--video_file', type=str, default=None)
-    parser.add_argument('--vis_type', type=str, default='distribution')
+    parser.add_argument('--output_file', type=str, default=None)
+    parser.add_argument('--vis_type', type=str, default='traj')
     args = parser.parse_args()
 
     if args.model_dir is not None:
@@ -90,21 +91,8 @@ def main():
     robot.print_info()
     if args.visualize:
         if args.vis_type in ['traj', 'video', 'snapshots']:
-            ob = env.reset(args.phase, args.test_case)
-            done = False
-            last_pos = np.array(robot.get_position())
-            while not done:
-                action = robot.act(ob)
-                action = ActionXY(action[0], action[1])
-                ob, _, done, info = env.step(action)
-                current_pos = np.array(robot.get_position())
-                logging.debug('Speed: %.2f', np.linalg.norm(current_pos - last_pos) / robot.time_step)
-                last_pos = current_pos
-            env.render(args.vis_type, args.video_file)
-            logging.info('It takes %.2f seconds to finish. Final status is %s', env.global_time, info)
-            if robot.visible and isinstance(info, ReachGoal):
-                (human_times, human_distances) = env.get_human_times()
-                logging.info('Average time for humans to reach goal: %.2f', sum(human_times) / len(human_times))
+            visualize_episode(env, robot, args)
+
         elif args.vis_type == 'distribution':
             env.discomfort_dist = 0.5
             n_tests = 1

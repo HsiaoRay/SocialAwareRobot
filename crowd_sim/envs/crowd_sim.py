@@ -293,7 +293,7 @@ class CrowdSim(gym.Env):
 
         return ob, reward, done, info
 
-    def render(self, mode='human', output_file=None):
+    def render(self, mode='traj', output_file=None):
         x_offset = 0.11
         y_offset = 0.11
         cmap = plt.cm.get_cmap('hsv', 10)
@@ -353,7 +353,10 @@ class CrowdSim(gym.Env):
                         ax.add_artist(human_direction)
 
             plt.legend([robot, goal], ['Robot', 'Goal'], fontsize=16)
-            plt.show()
+            if output_file:
+                plt.savefig(output_file)
+            else:
+                plt.show()
 
         elif mode in ['video', 'snapshots']:
             fig, ax = plt.subplots(figsize=(7, 7))
