@@ -4,9 +4,10 @@ import torch
 import numpy as np
 from crowd_sim.envs.utils.info import *
 from crowd_sim.envs.utils.action import ActionXY
+from crowd_nav.utils.visualize_episode import visualize_episode
 
 class EmpowermentExplorer(object):
-    def __init__(self, env, robot, device, memory=None, gamma=None, target_policy=None):
+    def __init__(self, env, robot, device, args, memory=None, gamma=None, target_policy=None):
         self.env = env
         self.robot = robot
         self.device = device
@@ -15,6 +16,7 @@ class EmpowermentExplorer(object):
         self.target_policy = target_policy
         self.target_model = None
         self.stats = None
+        self.args = args
 
     def update_target_model(self, model):
         self.target_model = copy.deepcopy(model)
@@ -61,11 +63,20 @@ class EmpowermentExplorer(object):
                     too_close += 1
                     min_dist.append(info.min_dist)
 
+
+            if i % 100 == 0:
+                self.args.vis_type = 'traj'
+                self.args.test_case = 12
+                self.args.output_file = 'episode_{}.png'.format(i)
+                self.robot.policy.set_phase('test')
+                visualize_episode(robot=self.robot, env=self.env, args=self.args)
+                self.robot.policy.set_phase('train')
+
             if isinstance(info, ReachGoal):
                 success += 1
                 success_times.append(self.env.global_time)
 
-                if phase in ['test']:
+                if phase in ['test', 'val']:
                     nav_distances.append(sum([(action.vx ** 2 + action.vy ** 2) ** .5 * self.robot.time_step for action in actions]))
                     (human_times, human_distances) = self.env.get_human_times()
                     hum_travel_dist.append(average(human_distances))
@@ -97,7 +108,7 @@ class EmpowermentExplorer(object):
         avg_nav_time = sum(success_times) / len(success_times) if success_times else self.env.time_limit
 
         extra_info = '' if episode is None else 'in episode {} '.format(episode)
-        test_info = '' if phase not in ['test'] else ', nav distance: {},  human distance: {:.2f}, human travel time: {:.2f}'.format(average(nav_distances), average(hum_travel_dist), average(hum_travel_time))
+        test_info = '' if phase not in ['test', 'val'] else ', nav distance: {},  human distance: {:.2f}, human travel time: {:.2f}'.format(average(nav_distances), average(hum_travel_dist), average(hum_travel_time))
         logging.info('{:<5} {}has success rate: {:.2f}, collision rate: {:.3f}, '
                      'nav time: {:.2f}, total reward: {:.4f} {}'.
                      format(phase.upper(), extra_info, success_rate, collision_rate, avg_nav_time,

@@ -119,10 +119,11 @@ class EmpowermentTrainer(object):
                                                                             actions=actions, action_ids=action_ids, losses=losses_statistics)
             if augment_rewards:
                 for i in range(0, len(rewards)):
-                    if rewards[i] >= 0.5:
+                    # if i % 3 == 0:
+                    if rewards[i] >= 0.0:
                         rewards[i] += augmented_rewards[i]
-                    elif rewards[i] <= 0.3:
-                        rewards[i] -= augmented_rewards[i]
+                    # elif rewards[i] <= 0.3:
+                    #     rewards[i] -= augmented_rewards[i]
             losses_policy = self.optimize_policy(states=states, rewards=rewards, losses=losses_policy)
         average_loss = losses_policy / num_batches
         logging.debug('Average loss : %.2E', average_loss)
