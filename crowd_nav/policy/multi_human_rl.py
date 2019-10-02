@@ -115,15 +115,21 @@ class MultiHumanRL(CADRL):
     def input_dim(self):
         return self.joint_state_dim + (self.cell_num ** 2 * self.om_channel_size if self.with_om else 0)
 
-    def visualize_dm(self, dm):
+    def visualize_dm(self, occupancy_maps):
 
-        fig, ax = plt.subplots(1, 3, figsize=(7, 7), num=2)
-        dm = np.asarray(dm)
-        dm = dm.reshape(16, 3).T
+        (n_humans, _) = occupancy_maps.shape
+        fig, ax = plt.subplots(n_humans, 3, figsize=(7, 7), num=2)
+        occupancy_maps = occupancy_maps.reshape(n_humans, self.cell_num, self.cell_num, 3)
 
-        for i, occupancy_map in enumerate(dm):
-            grid = occupancy_map.reshape(self.cell_num, self.cell_num)
-            ax[i].imshow(grid)
+        for i in range(n_humans):
+            ax[i, 0].set_title("human {} occupancy ".format((i)))
+            ax[i, 1].set_title("human {} v_x ".format((i)))
+            ax[i, 2].set_title("human {} v_y ".format((i)))
+
+            ax[i, 0].imshow(occupancy_maps[i, :, :, 0])
+            ax[i, 1].imshow(occupancy_maps[i, :, :, 1])
+            ax[i, 2].imshow(occupancy_maps[i, :, :, 2])
+
             plt.pause(.1)
 
     def visualize_om(self, occupancy_map):
@@ -190,8 +196,68 @@ class MultiHumanRL(CADRL):
                             raise NotImplementedError
                 for i, cell in enumerate(dm):
                     dm[i] = sum(dm[i]) / len(dm[i]) if len(dm[i]) != 0 else 0
+
+                occupancy_maps.append([dm])
+
+        #self.visualize_dm(torch.from_numpy(np.concatenate(occupancy_maps, axis=0)).float())
+        return torch.from_numpy(np.concatenate(occupancy_maps, axis=0)).float()
+
+    def build_occupancy_maps_batched(self, human_states):
+
+
+        """
+
+        :param human_states:
+        :return: tensor of shape (# human - 1, self.cell_num ** 2)
+        """
+        occupancy_maps = []
+        for human in human_states:
+            other_humans = np.concatenate([np.array([(other_human.px, other_human.py, other_human.vx, other_human.vy)])
+                                         for other_human in human_states if other_human != human], axis=0)
+            other_px = other_humans[:, 0] - human.px
+            other_py = other_humans[:, 1] - human.py
+            # new x-axis is in the direction of human's velocity
+            human_velocity_angle = np.arctan2(human.vy, human.vx)
+            other_human_orientation = np.arctan2(other_py, other_px)
+            rotation = other_human_orientation - human_velocity_angle
+            distance = np.linalg.norm([other_px, other_py], axis=0)
+            other_px = np.cos(rotation) * distance
+            other_py = np.sin(rotation) * distance
+
+            # compute indices of humans in the grid
+            other_x_index = np.floor(other_px / self.cell_size + self.cell_num / 2)
+            other_y_index = np.floor(other_py / self.cell_size + self.cell_num / 2)
+            other_x_index[other_x_index < 0] = float('-inf')
+            other_x_index[other_x_index >= self.cell_num] = float('-inf')
+            other_y_index[other_y_index < 0] = float('-inf')
+            other_y_index[other_y_index >= self.cell_num] = float('-inf')
+            grid_indices = self.cell_num * other_y_index + other_x_index
+            occupancy_map = np.isin(range(self.cell_num ** 2), grid_indices)
+            #self.visualize_om(occupancy_map)
+            if self.om_channel_size == 1:
+                occupancy_maps.append([occupancy_map.astype(int)])
+            else:
+                # calculate relative velocity for other agents
+                other_human_velocity_angles = np.arctan2(other_humans[:, 3], other_humans[:, 2])
+                rotation = other_human_velocity_angles - human_velocity_angle
+                speed = np.linalg.norm(other_humans[:, 2:4], axis=1)
+                other_vx = np.cos(rotation) * speed
+                other_vy = np.sin(rotation) * speed
+                dm = [list() for _ in range(self.cell_num ** 2 * self.om_channel_size)]
+                for i, index in np.ndenumerate(grid_indices):
+                    if index in range(self.cell_num ** 2):
+                        if self.om_channel_size == 2:
+                            dm[2 * int(index)].append(other_vx[i])
+                            dm[2 * int(index) + 1].append(other_vy[i])
+                        elif self.om_channel_size == 3:
+                            dm[3 * int(index)].append(1)
+                            dm[3 * int(index) + 1].append(other_vx[i])
+                            dm[3 * int(index) + 2].append(other_vy[i])
+                        else:
+                            raise NotImplementedError
+                for i, cell in enumerate(dm):
+                    dm[i] = sum(dm[i]) / len(dm[i]) if len(dm[i]) != 0 else 0
                 #self.visualize_dm(dm)
                 occupancy_maps.append([dm])
 
         return torch.from_numpy(np.concatenate(occupancy_maps, axis=0)).float()
-

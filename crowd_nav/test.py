@@ -11,7 +11,8 @@ from crowd_sim.envs.utils.robot import Robot
 from crowd_sim.envs.policy.orca import ORCA
 from crowd_sim.envs.utils.action import ActionXY
 from crowd_sim.envs.utils.info import *
-from crowd_nav.utils.plot import distribution_humans
+from crowd_nav.utils.plot import distribution_seperation_distance, distribution_human_path_lengths
+from crowd_nav.utils.visualize_episode import visualize_episode
 
 
 def main():
@@ -27,8 +28,8 @@ def main():
     parser.add_argument('--test_case', type=int, default=None)
     parser.add_argument('--square', default=False, action='store_true')
     parser.add_argument('--circle', default=False, action='store_true')
-    parser.add_argument('--video_file', type=str, default=None)
-    parser.add_argument('--vis_type', type=str, default='snapshots')
+    parser.add_argument('--output_file', type=str, default=None)
+    parser.add_argument('--vis_type', type=str, default='traj')
     args = parser.parse_args()
 
     if args.model_dir is not None:
@@ -61,8 +62,6 @@ def main():
         if args.model_dir is None:
             parser.error('Trainable policy must be specified with a model weights directory')
         policy.get_policy_model().load_state_dict(torch.load(policy_model_weight_file, map_location=device))
-        policy.get_statistics_model().load_state_dict(torch.load(statistics_model_weight_file, map_location=device))
-        policy.get_fwd_model().load_state_dict(torch.load(forward_dynamics_model_weight_file, map_location=device))
 
     # configure environment
     env_config = configparser.RawConfigParser()
@@ -92,27 +91,17 @@ def main():
     robot.print_info()
     if args.visualize:
         if args.vis_type in ['traj', 'video', 'snapshots']:
-            ob = env.reset(args.phase, args.test_case)
-            done = False
-            last_pos = np.array(robot.get_position())
-            while not done:
-                action = robot.act(ob)
-                action = ActionXY(action[0], action[1])
-                ob, _, done, info = env.step(action)
-                current_pos = np.array(robot.get_position())
-                logging.debug('Speed: %.2f', np.linalg.norm(current_pos - last_pos) / robot.time_step)
-                last_pos = current_pos
-            env.render(args.vis_type, args.video_file)
-            logging.info('It takes %.2f seconds to finish. Final status is %s', env.global_time, info)
-            if robot.visible and isinstance(info, ReachGoal):
-                human_times = env.get_human_times()
-                logging.info('Average time for humans to reach goal: %.2f', sum(human_times) / len(human_times))
-        elif args.vis_type == '2d_histogram' or args.vis_type == 'distance_distribution':
-            env.discomfort_dist = .5
-            n_tests = 100
+            visualize_episode(env, robot, args)
+
+        elif args.vis_type == 'distribution':
+            env.discomfort_dist = 0.5
+            n_tests = 1
             n_reached_goal = 0
             n_too_close = 0
             min_dist = []
+            hum_travel_dist = []
+            hum_travel_time = []
+            times = []
 
             for test_num in range(n_tests):
                 ob = env.reset(args.phase, test_num)
@@ -125,20 +114,23 @@ def main():
                     current_pos = np.array(robot.get_position())
                     logging.debug('Speed: %.2f', np.linalg.norm(current_pos - last_pos) / robot.time_step)
                     last_pos = current_pos
+
+                    if isinstance(info, Danger):
+                        n_too_close += 1
+                        min_dist.append(info.min_dist)
+
                 if isinstance(info, ReachGoal):
                     n_reached_goal += 1
+                    times.append(env.global_time)
 
-                env.render_k_tests(test_num, n_tests)
+                    (human_times, human_distances) = env.get_human_times()
+                    hum_travel_dist.append(human_distances)
+                    hum_travel_time.append(human_times)
 
-                if isinstance(info, Danger):
-                    print(info.min_dist)
-                    n_too_close += 1
-                    min_dist.append(info.min_dist)
-
-                if n_reached_goal != 0 and test_num != 0:
-                    logging.info('It takes %.2f seconds to finish. Final status is %s. Progress is %.f%%. Success rate is %.f%%.', env.global_time, info, ((test_num - 1 )/ n_tests) * 100,
-                                 (n_reached_goal / test_num - 1) * 100)
-            distribution_humans(min_dist, n_tests)
+                logging.info('Test %s takes %.2f seconds to finish. Final status is %s.', test_num, env.global_time,
+                             info)
+            distribution_seperation_distance(min_dist)
+            distribution_human_path_lengths(hum_travel_dist)
 
     else:
         explorer.run_k_episodes(env.case_size[args.phase], args.phase, print_failure=True)

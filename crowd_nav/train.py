@@ -14,29 +14,26 @@ from crowd_nav.utils.trainer import EmpowermentTrainer
 from crowd_nav.utils.memory import ReplayMemory
 from crowd_nav.utils.explorer import EmpowermentExplorer
 from crowd_nav.policy.policy_factory import policy_factory
+from crowd_nav.utils.visualize_episode import visualize_episode
 
 
 def main():
     parser = argparse.ArgumentParser('Parse configuration file')
     parser.add_argument('--env_config', type=str, default='configs/env.config')
-    parser.add_argument('--policy', type=str, default='chris')
+    parser.add_argument('--policy', type=str, default='cadrl')
     parser.add_argument('--policy_config', type=str, default='configs/policy.config')
-    parser.add_argument('--output_dir', type=str, default='data/output_empowerment')
+    parser.add_argument('--train_config', type=str, default='configs/train.config')
+    parser.add_argument('--output_dir', type=str, default='data/output')
     parser.add_argument('--weights', type=str)
     parser.add_argument('--resume', default=False, action='store_true')
     parser.add_argument('--gpu', default=False, action='store_true')
     parser.add_argument('--debug', default=False, action='store_true')
-    key = input('Dubug mode? (y/n)')
-    if key == 'y':
-        parser.add_argument('--train_config', type=str, default='configs/debug.config')
-    else:
-        parser.add_argument('--train_config', type=str, default='configs/train.config')
     args = parser.parse_args()
 
     # configure paths
     make_new_dir = True
     if os.path.exists(args.output_dir):
-        key = 'n'#input('Output directory already exists! Overwrite the folder? (y/n)')
+        key = input('Output directory already exists! Overwrite the folder? (y/n)')
         if key == 'y' and not args.resume:
             shutil.rmtree(args.output_dir)
         else:
@@ -119,7 +116,7 @@ def main():
     statistics_model = policy.get_statistics_model()
     forward_dynamics_model = policy.get_fwd_model()
 
-    explorer = EmpowermentExplorer(env, robot, device, memory, .9, target_policy=policy)
+    explorer = EmpowermentExplorer(env, robot, device, args, memory, .9, target_policy=policy)
 
     # imitation learning
     if args.resume:
@@ -209,6 +206,13 @@ def main():
             explorer.update_target_model(policy_model)
 
         if episode != 0 and episode % checkpoint_interval == 0:
+            args.vis_type = 'traj'
+            args.test_case = 12
+            args.output_file = 'episode_{}.png'.format(episode)
+            robot.policy.set_phase('test')
+            visualize_episode(robot=robot, env=env, args=args)
+            robot.policy.set_phase('train')
+
             torch.save(policy_model.state_dict(), rl_policy_model_weight_file)
             torch.save(statistics_model.state_dict(), rl_statistics_model_weight_file)
             torch.save(forward_dynamics_model.state_dict(), rl_forward_dynamics_model_weight_file)

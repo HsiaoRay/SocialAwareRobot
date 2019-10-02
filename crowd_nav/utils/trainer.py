@@ -23,7 +23,7 @@ class EmpowermentTrainer(object):
                  rl_learning_rate_q=0.001,
                  rl_learning_rate_s=0.001,
                  rl_learning_rate_fwd=0.001,
-                 intrinsic_param = 0.025,
+                 intrinsic_param=1.,
                  n_epochs=50):
         """
         Train the trainable model of a policy
@@ -90,15 +90,15 @@ class EmpowermentTrainer(object):
 
                 losses_policy = self.optimize_policy(states=states, rewards=rewards, losses=losses_policy)
 
-            logging.info('Epoch: {:.2f}, '
-                         'Time: {:.2f}, '
+            logging.info('Epoch: {}, '
                          'Rewards: {:.2f}, '
-                         'Augmented rewards: {:.6f}, '
-                         'loss statistics: {:.6f}, '
-                         'loss forward: {:.6f}, '
-                         'loss policy: {:.4f},'.
-                         format(epoch, time.time() - start_time, torch.mean(rewards), torch.mean(augmented_rewards),
-                                losses_statistics, losses_forward, losses_policy))
+                         'Augmented rewards: {:.2f}, '
+                         'Statistics loss: {:.6f}, '
+                         'Forward dynamics loss: {:.6f}, '
+                         'Policy loss: {:.4f}, '
+                         'Backward prop time: {:.2f}, batch_size: {}, '.
+                         format(epoch, torch.mean(rewards), torch.mean(augmented_rewards),
+                                losses_statistics, losses_forward, losses_policy, time.time() - start_time, self.data_loader.batch_size))
 
     def optimize_batch(self, num_batches, augment_rewards=True):
         if self.data_loader is None:
@@ -120,10 +120,8 @@ class EmpowermentTrainer(object):
                                                                             actions=actions, action_ids=action_ids, losses=losses_statistics)
             if augment_rewards:
                 for i in range(0, len(rewards)):
-                    if rewards[i] >= 0.5:
+                    if rewards[i] >= 0.0:
                         rewards[i] += augmented_rewards[i]
-                    elif rewards[i] <= 0.3:
-                        rewards[i] -= augmented_rewards[i]
             losses_policy = self.optimize_policy(states=states, rewards=rewards, losses=losses_policy)
         average_loss = losses_policy / num_batches
         logging.debug('Average loss : %.2E', average_loss)
@@ -169,12 +167,11 @@ class EmpowermentTrainer(object):
         self.optimizer_statistics_model.zero_grad()
         action_ids = self.encode_actions(action_ids, action_dim)
         action_ids = action_ids.type(torch.float32).to(self.device)
-        p_sa = self.statistics_model(new_states, action_ids)
-        p_s_a = self.statistics_model(new_state_marginals, action_ids)
+        p_sa_joint = self.statistics_model(new_states, action_ids)
+        p_sa_marginals = self.statistics_model(new_state_marginals, action_ids)
 
-        #lower_bound = self.criterion_statistics(p_sa, p_s_a)
-        lower_bound = -F.softplus(-torch.mean(p_sa[:])) - F.softplus(torch.mean(p_s_a[:]))
-        mutual_information = F.softplus(p_sa) - F.softplus(p_s_a)
+        lower_bound = -(F.softplus(-torch.mean(p_sa_joint[:])) + F.softplus(torch.mean(p_sa_marginals[:])))
+        mutual_information = -F.softplus(-p_sa_joint) + F.softplus(p_sa_marginals)
 
         # Maximize the mutual information
         loss = -lower_bound

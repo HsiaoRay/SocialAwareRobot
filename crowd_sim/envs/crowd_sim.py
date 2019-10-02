@@ -34,6 +34,7 @@ class CrowdSim(gym.Env):
         self.dogs = []
         self.global_time = None
         self.human_times = None
+        self.human_distances = None
         # reward function
         self.success_reward = None
         self.collision_penalty = None
@@ -106,8 +107,10 @@ class CrowdSim(gym.Env):
         self.global_time = 0
         if phase == 'test':
             self.human_times = [0] * self.human_num
+            self.human_distances = [0] * self.human_num
         else:
             self.human_times = [0] * (self.human_num if self.robot.policy.multiagent_training else 1)
+            self.human_distances = [0] * (self.human_num if self.robot.policy.multiagent_training else 1)
         if not self.robot.policy.multiagent_training:
             self.train_val_sim = 'circle_crossing'
 
@@ -128,7 +131,7 @@ class CrowdSim(gym.Env):
             self.generate_obstacle()
         else:
             assert phase == 'test'
-            if -3 < self.case_counter[phase] < 0:
+            if -3 <= self.case_counter[phase] < 0:
                 if self.case_counter[phase] == -2:
                     self.robot.set(0, 0, 0, self.circle_radius, 0, 0, np.pi / 2)
                 envBuilder = EnvBuilder(self.config, self.case_counter[phase])
@@ -136,6 +139,7 @@ class CrowdSim(gym.Env):
                 self.agent_num = len(humans) + len(dogs) + len(obstacles)
                 self.human_num = len(humans)
                 self.human_times = [0] * len(humans)
+                self.human_distances = [0] * len(humans)
                 self.dog_num = len(dogs)
                 self.obstacle_num = len(obstacles)
                 self.humans = humans
@@ -162,6 +166,7 @@ class CrowdSim(gym.Env):
 
     def onestep_lookahead(self, action):
         return self.step(action, update=False)
+
 
     def step(self, action, update=True):
         """
@@ -272,6 +277,8 @@ class CrowdSim(gym.Env):
                 # only record the first time the human reaches the goal
                 if self.human_times[i] == 0 and human.reached_destination():
                     self.human_times[i] = self.global_time
+                else:
+                    self.human_distances[i] += (human.vx ** 2 + human.vy ** 2) ** .5 * self.time_step
 
             # compute the observation
             if self.robot.sensor == 'coordinates':
@@ -286,7 +293,7 @@ class CrowdSim(gym.Env):
 
         return ob, reward, done, info
 
-    def render(self, mode='human', output_file=None):
+    def render(self, mode='traj', output_file=None):
         x_offset = 0.11
         y_offset = 0.11
         cmap = plt.cm.get_cmap('hsv', 10)
@@ -312,6 +319,9 @@ class CrowdSim(gym.Env):
             for obstacle in self.obstacles:
                 obs = plt.Circle(obstacle.get_position(), obstacle.radius, fill=True, color='g')
                 ax.add_artist(obs)
+
+            goal = mlines.Line2D([0], [4], color=goal_color, marker='*', linestyle='None', markersize=15, label='Goal')
+            ax.add_artist(goal)
 
             for k in range(len(self.states)):
                 if k % 4 == 0 or k == len(self.states) - 1:
@@ -342,8 +352,11 @@ class CrowdSim(gym.Env):
                     for human_direction in human_directions:
                         ax.add_artist(human_direction)
 
-            plt.legend([robot], ['Robot'], fontsize=16)
-            plt.show()
+            plt.legend([robot, goal], ['Robot', 'Goal'], fontsize=16)
+            if output_file:
+                plt.savefig(output_file)
+            else:
+                plt.show()
 
         elif mode in ['video', 'snapshots']:
             fig, ax = plt.subplots(figsize=(7, 7))
@@ -483,46 +496,6 @@ class CrowdSim(gym.Env):
             else:
                 plt.show()
 
-    def render_k_tests(self, test_num, n_tests):
-        def init():
-            self.resolution = 0.5
-            fig, ax = plt.subplots(figsize=(7, 7), num=1)
-            ax.tick_params(labelsize=16)
-            self.ax = ax
-            self.rows = []
-            self.cols = []
-            self.screen_width = 24
-            self.rows.append(-self.screen_width/2 + 1)
-            self.rows.append(self.screen_width/2 + 1)
-            self.cols.append(-self.screen_width/2 + 1)
-            self.cols.append(self.screen_width/2 + 1)
-
-        def finalize():
-            self.ax.hist2d(self.cols, self.rows, bins=self.screen_width / self.resolution)
-            self.ax.set_xlim(-self.screen_width/2, self.screen_width/2)
-            self.ax.set_ylim(-self.screen_width/2, self.screen_width/2)
-            plt.show()
-
-        def update():
-            humans_and_dogs = self.humans + self.dogs
-            human_positions = [[self.states[i][1][j].position for j in range(len(humans_and_dogs))]
-                               for i in range(len(self.states))]
-            for i_human in range(len(humans_and_dogs)):
-                for time in range(len(self.states)):
-                    if time % 1 == 0 or time == len(self.states) - 1:
-                        if time * self.time_step > 8:
-                            break
-                        positions_human = human_positions[time][i_human]
-                        row = positions_human[1] / self.resolution
-                        col = positions_human[0] / self.resolution
-                        if -self.screen_width/2 <= row <= self.screen_width/2 and -self.screen_width/2 <= col <= self.screen_width/2:
-                            self.rows.append(row)
-                            self.cols.append(col)
-        if test_num == 0:
-            init()
-        update()
-        if test_num == (n_tests - 1):
-            finalize()
 
     def generate_random_human_position(self, human_num, rule):
         """
@@ -643,6 +616,8 @@ class CrowdSim(gym.Env):
             for i, human in enumerate(self.humans):
                 if self.human_times[i] == 0 and human.reached_destination():
                     self.human_times[i] = self.global_time
+                else:
+                    self.human_distances[i] += (human.vx ** 2 + human.vy ** 2) ** .5 * self.time_step
 
             # for visualization
             self.robot.set_position(sim.getAgentPosition(0))
@@ -651,7 +626,7 @@ class CrowdSim(gym.Env):
             self.states.append([self.robot.get_full_state(), [human.get_full_state() for human in self.humans]])
 
         del sim
-        return self.human_times
+        return self.human_times, self.human_distances
 
     def check_collision_robot(self, agent, action, dmin):
         # collision detection
