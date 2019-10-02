@@ -357,6 +357,7 @@ class CrowdSim(gym.Env):
                 plt.savefig(output_file)
             else:
                 plt.show()
+            plt.close()
 
         elif mode in ['video', 'snapshots']:
             fig, ax = plt.subplots(figsize=(7, 7))
