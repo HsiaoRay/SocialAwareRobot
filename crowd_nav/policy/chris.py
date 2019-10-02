@@ -71,10 +71,10 @@ class ValueNetwork(nn.Module):
 
 
 class ForwardDynamicsNetwork(nn.Module):
-    def __init__(self, input_dim, action_dim):
+    def __init__(self, input_dim, action_dim, num_human):
         super().__init__()
         self.action_dim = action_dim
-        self.input_dim = input_dim * 5
+        self.input_dim = input_dim * num_human
         self.state_layer1 = nn.Linear(in_features=self.input_dim, out_features=150)
         self.state_layer2 = nn.Linear(in_features=150, out_features=250)
         self.state_layer3 = nn.Linear(in_features=250, out_features=150)
@@ -112,10 +112,10 @@ class ForwardDynamicsNetwork(nn.Module):
 
 
 class StatisticsNetwork(nn.Module):
-    def __init__(self, input_dim, action_dim):
+    def __init__(self, input_dim, action_dim, num_human):
         super().__init__()
         self.action_dim = action_dim
-        self.input_dim = input_dim * 5
+        self.input_dim = input_dim * num_human
         self.state_layer1 = nn.Linear(in_features=self.input_dim, out_features=150)
         self.state_layer2 = nn.Linear(in_features=150, out_features=250)
         self.state_layer3 = nn.Linear(in_features=250, out_features=150)
@@ -176,13 +176,16 @@ class Chris(MultiHumanRL):
         with_global_state = config.getboolean('sarl', 'with_global_state')
         self.policy_model = ValueNetwork(self.input_dim(), self.self_state_dim, mlp1_dims, mlp2_dims, mlp3_dims,
                                   attention_dims, with_global_state, self.cell_size, self.cell_num)
-
-        self.fwd_model = ForwardDynamicsNetwork(self.input_dim(), self.action_dim)
-        self.statistics_model = StatisticsNetwork(self.input_dim(), self.action_dim)
         self.multiagent_training = config.getboolean('sarl', 'multiagent_training')
         if self.with_om:
             self.name = 'OM-Chris'
         logging.info('Policy: {} {} global state'.format(self.name, 'w/' if with_global_state else 'w/o'))
+
+    def make_fwd_model(self, num_hum):
+        self.fwd_model = ForwardDynamicsNetwork(self.input_dim(), self.action_dim, num_hum)
+
+    def make_stats_model(self, num_hum):
+        self.statistics_model = StatisticsNetwork(self.input_dim(), self.action_dim, num_hum)
 
     def get_attention_weights(self):
         return self.policy_model.attention_weights
@@ -277,6 +280,9 @@ def build_action_space(v_pref=1.0, speed_samples=5, rotation_samples=16):
         action_space.append(ActionXY(speed * np.cos(rotation), speed * np.sin(rotation)))
 
     return torch.FloatTensor(action_space)
+
+def build_state_space():
+    return
 
 
 

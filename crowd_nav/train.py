@@ -82,6 +82,11 @@ def main():
     env_config.read(args.env_config)
     env = gym.make('CrowdSim-v0')
     env.configure(env_config)
+
+    num_humans = env_config.getint('sim', 'human_num')
+    policy.make_fwd_model(num_humans)
+    policy.make_stats_model(num_humans)
+
     robot = Robot(env_config, 'robot')
     env.set_robot(robot)
 
