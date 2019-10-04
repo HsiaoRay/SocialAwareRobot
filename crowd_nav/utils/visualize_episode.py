@@ -19,7 +19,7 @@ def visualize_episode(env, robot, args):
         last_pos = current_pos
 
     robot_info = 'Final status is {}. Robot time: {:.2f} s.'.format(info, env.global_time)
-    if robot.visible and isinstance(info, ReachGoal):
+    if robot.visible and isinstance(info, ReachGoal) and env.human_num > 0:
         (human_times, human_distances) = env.get_human_times()
         human_info = ' Human time: {:.2f}.'.format(sum(human_times) / len(human_times))
     else:
