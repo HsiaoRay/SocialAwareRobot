@@ -217,7 +217,7 @@ class CrowdSim(gym.Env):
         for obstacle in self.obstacles:
             result = self.check_collision_robot_obstacle(obstacle, action, dmin)
             collision |= result[0]
-            dmin = min(dmin, result[0])
+            dmin = min(dmin, result[1])
 
         # collision detection between humans
         human_num = len(self.humans)
