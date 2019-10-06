@@ -119,6 +119,7 @@ class CrowdSim(gym.Env):
 
         self.robot.set(0, -self.circle_radius, 0, self.circle_radius, 0, 0, np.pi / 2)
         if self.case_counter[phase] >= 0:
+            self.generate_obstacle()
             np.random.seed(counter_offset[phase] + self.case_counter[phase])
             if phase in ['train', 'val']:
                 human_num = self.human_num if self.robot.policy.multiagent_training else 1
@@ -128,7 +129,6 @@ class CrowdSim(gym.Env):
             # case_counter is always between 0 and case_size[phase]
             self.case_counter[phase] = (self.case_counter[phase] + 1) % self.case_size[phase]
             self.generate_dog()
-            self.generate_obstacle()
         else:
             assert phase == 'test'
             if -3 <= self.case_counter[phase] < 0:
@@ -210,14 +210,21 @@ class CrowdSim(gym.Env):
             closest_dist = point_to_segment_dist(px, py, ex, ey, 0, 0) - human.radius - self.robot.radius
             if closest_dist < 0:
                 collision = True
-                # logging.debug("Collision: distance between robot and p{} is {:.2E}".format(i, closest_dist))
+                logging.debug("Collision: distance between robot and p{} is {:.2E}".format(i, closest_dist))
                 break
             elif closest_dist < dmin:
                 dmin = closest_dist
         for obstacle in self.obstacles:
-            result = self.check_collision_robot_obstacle(obstacle, action, dmin)
-            collision |= result[0]
-            dmin = min(dmin, result[1])
+            px = obstacle.px - self.robot.px
+            py = obstacle.py - self.robot.py
+            dist = (px ** 2 + py ** 2) ** .5 - obstacle.radius - self.robot.radius
+
+            if dist < 0:
+                collision = True
+                logging.debug("Collision: distance between robot and obstacle is {:.2E}".format(dist))
+                break
+            elif dist < dmin:
+                dmin = dist
 
         # collision detection between humans
         human_num = len(self.humans)
@@ -536,6 +543,11 @@ class CrowdSim(gym.Env):
                         norm((px - agent.gx, py - agent.gy)) < min_dist:
                     collide = True
                     break
+            for obstacle in self.obstacles:
+                min_dist = human.radius + obstacle.radius + self.discomfort_dist
+                if norm((px - obstacle.px, py - obstacle.py)) < min_dist:
+                    collide = True
+                    break
             if not collide:
                 break
         human.set(px, py, -px, -py, 0, 0, 0)
@@ -583,7 +595,12 @@ class CrowdSim(gym.Env):
     def generate_obstacle(self):
         self.obstacles = []
         for i in range(self.obstacle_num):
+            angle = np.random.random() * np.pi * 2
+            radius = np.random.random() * self.circle_radius / 2
             obstacle = Obstacle()
+            # add some noise to simulate all the possible cases robot could meet with human
+            obstacle.px = radius * np.cos(angle)
+            obstacle.py = radius * np.sin(angle)
             self.obstacles.append(obstacle)
 
     def get_human_times(self):
@@ -629,63 +646,3 @@ class CrowdSim(gym.Env):
         del sim
         return self.human_times, self.human_distances
 
-    def check_collision_robot(self, agent, action, dmin):
-        # collision detection
-        collision = False
-
-        px = agent.px - self.robot.px
-        py = agent.py - self.robot.py
-
-        if self.robot.kinematics == 'holonomic':
-            vx = agent.vx - action.vx
-            vy = agent.vy - action.vy
-        else:
-            vx = agent.vx - action.v * np.cos(action.r + self.robot.theta)
-            vy = agent.vy - action.v * np.sin(action.r + self.robot.theta)
-        ex = px + vx * self.time_step
-        ey = py + vy * self.time_step
-        # closest distance between boundaries of agent and robot
-        closest_dist = point_to_segment_dist(px, py, ex, ey, 0,
-                                             0) - agent.radius - self.robot.radius
-
-        if closest_dist < 0:
-            collision = True
-            logging.debug("Collision: distance between robot and human/dog is {:.2E}".format(closest_dist))
-        elif closest_dist < dmin:
-            dmin = closest_dist
-
-        return collision, dmin
-
-    def check_collision_robot_obstacle(self, obstacle, action, dmin):
-        # collision detection
-        collision = False
-
-        px = obstacle.px - self.robot.px
-        py = obstacle.py - self.robot.py
-
-        if self.robot.kinematics == 'holonomic':
-            vx = - action.vx
-            vy = - action.vy
-        else:
-            vx = - action.v * np.cos(action.r + self.robot.theta)
-            vy = - action.v * np.sin(action.r + self.robot.theta)
-        ex = px + vx * self.time_step
-        ey = py + vy * self.time_step
-        # closest distance between boundaries of agent and robot
-        closest_dist = point_to_segment_dist(px, py, ex, ey, 0,
-                                             0) - obstacle.radius - self.robot.radius
-        if closest_dist < 0:
-            collision = True
-            logging.debug("Collision: distance between robot and obstacle is {:.2E}".format(closest_dist))
-        elif closest_dist < dmin:
-            dmin = closest_dist
-
-        return (collision, dmin)
-
-    def check_collision(self, agent1, agent2):
-        dx = agent2.px - agent1.px
-        dy = agent2.py - agent1.py
-        dist = (dx ** 2 + dy ** 2) ** (1 / 2) - agent2.radius - agent1.radius
-        if dist < 0:
-            # detect collision but don't take collisions into account
-            logging.debug('Collision happens between non-robots in step()')

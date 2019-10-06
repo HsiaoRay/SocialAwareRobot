@@ -23,7 +23,7 @@ class EmpowermentTrainer(object):
                  rl_learning_rate_q=0.001,
                  rl_learning_rate_s=0.001,
                  rl_learning_rate_fwd=0.001,
-                 intrinsic_param=1.,
+                 intrinsic_param=.1,
                  n_epochs=50):
         """
         Train the trainable model of a policy
@@ -118,10 +118,10 @@ class EmpowermentTrainer(object):
             losses_forward = self.optimize_forward(states=states, action_ids=action_ids, new_states=new_states, losses=losses_forward)
             losses_statistics, augmented_rewards = self.optimize_statistics(states=states, new_states=new_states,
                                                                             actions=actions, action_ids=action_ids, losses=losses_statistics)
-            if augment_rewards:
-                for i in range(0, len(rewards)):
-                    if rewards[i] >= 0.0:
-                        rewards[i] += augmented_rewards[i]
+            # if augment_rewards:
+            #     for i in range(0, len(rewards)):
+            #         if rewards[i] >= 0.0:
+            #             rewards[i] += augmented_rewards[i]
             losses_policy = self.optimize_policy(states=states, rewards=rewards, losses=losses_policy)
         average_loss = losses_policy / num_batches
         logging.debug('Average loss : %.2E', average_loss)
@@ -180,7 +180,7 @@ class EmpowermentTrainer(object):
         self.optimizer_statistics_model.step()
 
         mutual_information = mutual_information.detach()
-        #mutual_information = torch.clamp(input=mutual_information, min=-1., max=1.)
+        mutual_information = torch.clamp(input=mutual_information, min=0., max=1.)
 
         augmented_rewards = self.intrinsic_param * mutual_information
         # augmented_rewards = mutual_information

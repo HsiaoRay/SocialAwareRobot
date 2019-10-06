@@ -212,6 +212,26 @@ class Chris(MultiHumanRL):
         else:
             return max_action, max_value, max_action_id
 
+    def transform(self, state):
+        """
+        Take the state passed from agent and transform it to the input of value network
+
+        :param state:
+        :return: tensor of shape (# of humans, len(state))
+        """
+        state_tensor = torch.cat([torch.Tensor([state.self_state + human_state]).to(self.device)
+                                  for human_state in state.human_states], dim=0)
+        if self.with_om:
+            self_state = np.array([state.self_state.px, state.self_state.py, state.self_state.vx,
+                                   state.self_state.vx])
+            occupancy_maps = self.build_state_space(self_state, state.human_states).to(self.device)
+            #occupancy_maps = self.build_occupancy_maps(state.human_states).to(self.device)
+            state_tensor = torch.cat([self.rotate(state_tensor), occupancy_maps], dim=1)
+        else:
+            state_tensor = self.rotate(state_tensor)
+        return state_tensor
+
+
     def predict(self, state):
         """
         A base class for all methods that takes pairwise joint state as input to value network.
@@ -254,7 +274,9 @@ class Chris(MultiHumanRL):
                 rotated_batch_input = self.rotate(batch_next_states).unsqueeze(0)
                 if self.with_om:
                     if occupancy_maps is None:
-                        occupancy_maps = self.build_occupancy_maps(next_human_states).unsqueeze(0).to(self.device)
+                        self_state = np.array([next_self_state.px.numpy(), next_self_state.py.numpy(), next_self_state.vx.numpy(), next_self_state.vx.numpy()])
+                        occupancy_maps = self.build_state_space(self_state, next_human_states).unsqueeze(0).to(self.device)
+                        #occupancy_maps = self.build_occupancy_maps(next_human_states).unsqueeze(0).to(self.device)
                     rotated_batch_input = torch.cat([rotated_batch_input, occupancy_maps], dim=2)
                 # VALUE UPDATE
                 max_action, max_value, max_action_id = self.value_update(state, action, max_action, max_value, reward, rotated_batch_input, action_id, max_action_id)
@@ -266,6 +288,64 @@ class Chris(MultiHumanRL):
         self.last_action_id = max_action_id
         return max_action
 
+    def build_state_space(self, self_state, human_states):
+        """
+
+         :param human_states:
+         :return: tensor of shape (# human - 1, self.cell_num ** 2)
+         """
+        occupancy_maps = []
+        other_humans = np.concatenate([np.array([(other_human.px, other_human.py, other_human.vx, other_human.vy)])
+                                       for other_human in human_states], axis=0)
+        other_px = other_humans[:, 0] - self_state[0]
+        other_py = other_humans[:, 1] - self_state[1]
+        # new x-axis is in the direction of human's velocity
+        human_velocity_angle = np.arctan2(self_state[3], self_state[2])
+        other_human_orientation = np.arctan2(other_py, other_px)
+        rotation = other_human_orientation - human_velocity_angle
+        distance = np.linalg.norm([other_px, other_py], axis=0)
+        other_px = np.cos(rotation) * distance
+        other_py = np.sin(rotation) * distance
+
+        # compute indices of humans in the grid
+        other_x_index = np.floor(other_px / self.cell_size + self.cell_num / 2)
+        other_y_index = np.floor(other_py / self.cell_size + self.cell_num / 2)
+        other_x_index[other_x_index < 0] = float('-inf')
+        other_x_index[other_x_index >= self.cell_num] = float('-inf')
+        other_y_index[other_y_index < 0] = float('-inf')
+        other_y_index[other_y_index >= self.cell_num] = float('-inf')
+        grid_indices = self.cell_num * other_y_index + other_x_index
+        occupancy_map = np.isin(range(self.cell_num ** 2), grid_indices)
+        # self.visualize_om(occupancy_map)
+        if self.om_channel_size == 1:
+            occupancy_maps.append([occupancy_map.astype(int)])
+        else:
+            # calculate relative velocity for other agents
+            other_human_velocity_angles = np.arctan2(other_humans[:, 3], other_humans[:, 2])
+            rotation = other_human_velocity_angles - human_velocity_angle
+            speed = np.linalg.norm(other_humans[:, 2:4], axis=1)
+            other_vx = np.cos(rotation) * speed
+            other_vy = np.sin(rotation) * speed
+
+            for i, index in np.ndenumerate(grid_indices):
+                dm = np.zeros(self.cell_num ** 2 * self.om_channel_size)
+                if index in range(self.cell_num ** 2):
+                    if self.om_channel_size == 2:
+                        dm[2 * int(index)] = other_vx[i]
+                        dm[2 * int(index) + 1] = other_vy[i]
+                    elif self.om_channel_size == 3:
+                        dm[3 * int(index)] = 1
+                        dm[3 * int(index) + 1] = other_vx[i]
+                        dm[3 * int(index) + 2] = other_vy[i]
+                    else:
+                        raise NotImplementedError
+
+                # for i, cell in enumerate(dm):
+                #     dm[i] = sum(dm[i]) / len(dm[i]) if len(dm[i]) != 0 else 0
+                occupancy_maps.append([dm])
+
+        # self.visualize_dm(torch.from_numpy(np.concatenate(occupancy_maps, axis=0)).float())
+        return torch.from_numpy(np.concatenate(occupancy_maps, axis=0)).float()
 
 def build_action_space(v_pref=1.0, speed_samples=5, rotation_samples=16):
     """
@@ -281,8 +361,8 @@ def build_action_space(v_pref=1.0, speed_samples=5, rotation_samples=16):
 
     return torch.FloatTensor(action_space)
 
-def build_state_space():
-    return
+
+
 
 
 
