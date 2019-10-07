@@ -63,13 +63,12 @@ class EmpowermentExplorer(object):
                     too_close += 1
                     min_dist.append(info.min_dist)
 
-
             if i % 100 == 0:
                 self.args.vis_type = 'traj'
                 self.args.test_case = 12
                 self.args.output_file = 'episode_{}.png'.format(i)
                 self.robot.policy.set_phase('test')
-                visualize_episode(robot=self.robot, env=self.env, args=self.args)
+                visualize_episode(robot=self.robot, env=self.env, args=self.args, imitation_learning=imitation_learning)
                 self.robot.policy.set_phase('train')
 
             if isinstance(info, ReachGoal):

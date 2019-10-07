@@ -6,7 +6,7 @@ from crowd_sim.envs.utils.action import ActionXY
 from crowd_sim.envs.utils.info import *
 
 
-def visualize_episode(env, robot, args):
+def visualize_episode(env, robot, args, imitation_learning=False):
     ob = env.reset(phase='test', test_case=args.test_case)
     done = False
     last_pos = np.array(robot.get_position())
@@ -28,6 +28,10 @@ def visualize_episode(env, robot, args):
     logging.info('{}{}'.format(robot_info, human_info))
 
     if (args.vis_type == 'traj' and args.output_file[-4:] == ".png") or (args.vis_type == 'video' and args.output_file[-4:] == ".mp4"):
+        if imitation_learning:
+            args.output_file = args.output_file[:-4] + "_IL_" + args.output_file[-4:]
+        else:
+            args.output_file = args.output_file[:-4] + "_RL_" + args.output_file[-4:]
         env.render(mode=args.vis_type, output_file=args.output_file)
     elif args.vis_type == 'traj':
         env.render(mode=args.vis_type)
